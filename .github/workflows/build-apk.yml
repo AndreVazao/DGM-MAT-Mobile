@@ -1,0 +1,74 @@
+name: One-shot Android APK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "web/app.js"
+      - "package.json"
+      - "capacitor.config.json"
+      - "tests/mobile-client-contract.test.cjs"
+      - ".github/workflows/build-apk.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: dgm-mobile-apk-one-shot
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    name: Validate mobile client, build APK and suspend workflow
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout mobile client
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Validate mobile client contract
+        run: |
+          npm install --no-audit --no-fund
+          npm run test:contract
+          node --check web/app.js
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Generate native Android wrapper
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          npx cap add android
+          npx cap sync android
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+          test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Stage APK artifact
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk DGM-MAT-Mobile-debug.apk
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: DGM-MAT-Mobile-Android-APK
+          path: DGM-MAT-Mobile-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Disable this workflow after successful build
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/build-apk.yml/disable"
+          echo "APK build passed and artifact uploaded; workflow disabled to conserve Actions minutes."
