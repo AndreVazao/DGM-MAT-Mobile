@@ -43,11 +43,17 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install required Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}" || { echo "ANDROID_HOME is not configured on this runner."; exit 1; }
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -x "$SDKMANAGER" || { echo "Android SDK manager not found under ANDROID_HOME."; exit 1; }
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - name: Generate native Android wrapper
         run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
           npx cap add android
           npx cap sync android
       - name: Build debug APK
