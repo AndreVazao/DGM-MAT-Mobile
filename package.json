@@ -1,0 +1,16 @@
+{
+  "name": "dgm-mat-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lightweight DGM-MAT remote chat cockpit for Android and web",
+  "scripts": {
+    "test:contract": "node --test tests/mobile-client-contract.test.cjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "7.4.3",
+    "@capacitor/core": "7.4.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.4.3"
+  }
+}
