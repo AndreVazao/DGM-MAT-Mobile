@@ -6,7 +6,7 @@ state.threads=Array.isArray(state.threads)?state.threads:[];state.activeId=state
 const el={drawer:document.getElementById("drawer"),list:document.getElementById("threadList"),chat:document.getElementById("chat"),input:document.getElementById("input"),dot:document.getElementById("dot"),connection:document.getElementById("connectionText"),title:document.getElementById("titleButton"),context:document.getElementById("contextLine"),intent:document.getElementById("intentBar"),dialog:document.getElementById("renameDialog"),renameInput:document.getElementById("renameInput"),endpoint:document.getElementById("endpointLabel")};
 function save(){try{localStorage.setItem(STORAGE,JSON.stringify(state))}catch(e){showNotice("Não foi possível guardar o estado local neste dispositivo.")}}
 function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]})}
-function makeId(){return typeof crypto!=="undefined"&&typeof crypto.randomUUID==="function"?makeId():""+Date.now()+"-"+Math.random().toString(36).slice(2)}
+function makeId(){return typeof crypto!=="undefined"&&typeof crypto.randomUUID==="function"?crypto.randomUUID():""+Date.now()+"-"+Math.random().toString(36).slice(2)}
 function api(path,opt){opt=opt||{};opt.headers=Object.assign({"Content-Type":"application/json"},opt.headers||{});return fetch(state.apiBase+path,opt)}
 function online(ok,msg){el.dot.classList.toggle("online",ok);el.connection.textContent=msg}
 function isNativeApp(){return Boolean(window.Capacitor&&typeof window.Capacitor.isNativePlatform==="function"&&window.Capacitor.isNativePlatform())}
