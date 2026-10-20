@@ -2,6 +2,14 @@ name: One-shot Android APK Build
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "web/app.js"
+      - "package.json"
+      - "capacitor.config.json"
+      - "tests/mobile-client-contract.test.cjs"
+      - ".github/workflows/build-apk.yml"
 
 permissions:
   contents: read
