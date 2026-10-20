@@ -1,0 +1,8 @@
+{
+  "appId": "com.andrevazao.dgmmatmobile",
+  "appName": "DGM-MAT",
+  "webDir": "web",
+  "server": {
+    "androidScheme": "https"
+  }
+}
