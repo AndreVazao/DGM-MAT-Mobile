@@ -22,6 +22,10 @@ test("Capacitor wrapper points to the existing web client and stable application
 });
 
 test("mobile client keeps rendezvous discovery and never embeds a PC address", () => {
-  assert.match(app, /public-discovery\?node=PC-Vazao-Anjos/);
+  assert.match(app, /api\/rendezvous\?public=1&node=PC-Vazao-Anjos/);
+  assert.match(app, /d\.node&&d\.node\.endpoint/);
+  assert.match(app, /Mensagem guardada neste telemóvel, mas NÃO enviada/);
+  assert.match(app, /Falha ao enviar/);
+  assert.match(app, /function makeId\(\)/);
   assert.doesNotMatch(app, /https?:\/\/100\.[0-9.]+/);
 });
