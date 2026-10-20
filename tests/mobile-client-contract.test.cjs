@@ -27,5 +27,7 @@ test("mobile client keeps rendezvous discovery and never embeds a PC address", (
   assert.match(app, /Mensagem guardada neste telemóvel, mas NÃO enviada/);
   assert.match(app, /Falha ao enviar/);
   assert.match(app, /function makeId\(\)/);
+  assert.match(app, /id:"local-"\+makeId\(\)/);
+  assert.match(app, /id:"pending-"\+makeId\(\)/);
   assert.doesNotMatch(app, /https?:\/\/100\.[0-9.]+/);
 });
