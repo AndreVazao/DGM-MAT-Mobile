@@ -36,5 +36,6 @@ test("mobile client keeps rendezvous discovery and never embeds a PC address", (
 test("native Android app keeps the header below the Android status bar safe area", () => {
   assert.match(app, /classList\.toggle\("native-app",isNativeApp\(\)\)/);
   const css = fs.readFileSync(path.join(root, "web/styles.css"), "utf8");
-  assert.match(css, /\.native-app \.app\{padding-top:max\(env\(safe-area-inset-top\),24px\)\}/);
+  assert.match(css, /\.native-app \.app\{padding-top:max\(env\(safe-area-inset-top\),56px\)\}/);
+  assert.match(css, /\.native-app \.drawer\{top:max\(env\(safe-area-inset-top\),56px\)\}/);
 });
