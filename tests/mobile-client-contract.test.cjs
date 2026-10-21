@@ -65,3 +65,27 @@ test("mobile pairing uses a one-time code and short-lived bearer session", () =>
   assert.match(app, /fetch\(state\.apiBase\+"\/auth\/pair"/);
   assert.match(app, /expires_at:body\.expires_at/);
 });
+
+
+test("mobile cockpit exposes projects, agents, providers, missions and approvals", () => {
+  const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
+  for (const panel of ["projects", "agents", "providers", "missions", "approvals"]) {
+    assert.match(html, new RegExp('data-panel="' + panel + '"'));
+    assert.match(app, new RegExp(panel + ': \\{title:'));
+  }
+  assert.match(app, /\/runtime\/workspace\/scan/);
+  assert.match(app, /\/runtime\/status/);
+  assert.match(app, /\/runtime\/providers/);
+  assert.match(app, /\/runtime\/missions/);
+  assert.match(app, /\/runtime\/approvals/);
+  assert.match(app, /Não foram efetuadas alterações/);
+});
+
+test("voice controls degrade gracefully when Android WebView speech APIs are unavailable", () => {
+  const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
+  assert.match(html, /id="voiceInput"/);
+  assert.match(html, /id="speakToggle"/);
+  assert.match(app, /window\.SpeechRecognition\|\|window\.webkitSpeechRecognition/);
+  assert.match(app, /speechSynthesis/);
+  assert.match(app, /O reconhecimento de voz não está disponível neste Android\/WebView/);
+});
