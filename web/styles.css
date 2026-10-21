@@ -8,3 +8,15 @@
 .usb-actions{display:grid;grid-template-columns:1fr;gap:8px}
 .usb-actions button{text-align:left;min-height:42px}
 .usb-report{margin:0;max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;color:var(--muted);background:var(--bg);padding:10px;border-radius:10px}
+
+
+/* Mobile cockpit navigation and voice controls */
+.cockpit-menu{display:grid;gap:2px;padding:0 10px 10px;border-bottom:1px solid var(--line);max-height:36dvh;overflow:auto}
+.menu-option{width:100%;min-height:42px;text-align:left;border:1px solid transparent;border-radius:11px;background:transparent;color:var(--text);padding:10px 12px;font-size:13px}
+.menu-option:active,.menu-option:focus-visible{background:var(--panel2);border-color:var(--line);outline:none}
+.composer{align-items:flex-end}
+.voice-button{flex:0 0 42px;width:42px;height:46px;border:1px solid var(--line);border-radius:15px;background:var(--panel);color:var(--text);font-size:18px}
+.voice-button.voice-active{background:var(--accent);color:#07101e;border-color:var(--accent)}
+.cockpit-dialog{width:min(94vw,560px);max-height:86dvh;overflow:auto}
+.cockpit-content{margin:0;max-height:52dvh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--text);background:var(--bg);padding:12px;border:1px solid var(--line);border-radius:12px}
+@media(min-width:800px){.cockpit-menu{max-height:unset}.menu-option{font-size:13px}}
