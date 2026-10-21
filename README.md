@@ -3,6 +3,10 @@
 ## Purpose
 A lightweight mobile chat/PWA surface for sending requests to and viewing responses from the DGM-MAT brain on the PC.
 
+## Canonical end-to-end contract
+
+The governing workflow and department model is documented in [DGM-MAT Canonical Operating Model — End-to-End and Departments](https://github.com/AndreVazao/DGM-MAT/blob/main/docs/architecture/DGM-MAT-CANONICAL-OPERATING-MODEL-END-TO-END-AND-DEPARTMENTS-2026-10-21.md). The mobile app must display the PC brain's persisted, verified mission state from request intake through execution, independent validation and final response. UI scaffolding or an APK build does not prove end-to-end operation; unavailable endpoints/capabilities must be shown as unavailable, never simulated as success.
+
 ## Authority boundary
 - The PC DGM-MAT runtime is the sole execution authority and source of truth.
 - Mobile is a client/cockpit, not a second brain, agent orchestrator or policy engine.
