@@ -25,12 +25,79 @@ async function load(){if(!(await connect())){if(!state.threads.length)localThrea
 async function select(id){state.activeId=id;save();const t=active();if(t&&!t.id.startsWith("local-")&&await connect())try{const r=await api("/mobile/threads/"+encodeURIComponent(id));if(r.ok){const s=await r.json(),i=state.threads.findIndex(function(x){return x.id===id});if(i>=0)state.threads[i]=s;save()}}catch(e){}renderChat();el.drawer.classList.remove("open")}
 function showNotice(message){el.intent.classList.remove("hidden");el.intent.textContent=message}
 function showIntent(i){if(!i){el.intent.classList.add("hidden");return}el.intent.classList.remove("hidden");const labels={chat:"conversa",status:"estado",audit:"auditoria",repair:"reparação",implement:"implementação",sync:"sincronização",research:"investigação",memory:"memória",deploy:"publicação"};el.intent.innerHTML="<strong>Entendido como "+esc(labels[i.intent]||i.intent)+"</strong> · confiança "+Math.round((i.confidence||0)*100)+"%"+(i.requires_approval?" · aprovação necessária":"")}
-async function send(){const value=el.input.value.trim();if(!value)return;let t=active()||localThread();const pending={id:"pending-"+makeId(),role:"user",content:value,created_at:new Date().toISOString(),state:"pending"};t.messages.push(pending);t.updated_at=pending.created_at;el.input.value="";save();renderChat();if(!(await connect())){state.pending.push({threadId:t.id,content:value});save();showNotice("Mensagem guardada neste telemóvel, mas NÃO enviada: não foi possível localizar o PC DGM-MAT.");return}try{t=await serverThread(t);const r=await api("/mobile/threads/"+encodeURIComponent(t.id)+"/messages",{method:"POST",body:JSON.stringify({content:value})});if(!r.ok)throw Error(r.status);const d=await r.json(),i=state.threads.findIndex(function(x){return x.id===t.id});if(i>=0)state.threads[i]=d.thread;save();renderChat();showIntent(d.intent)}catch(e){state.pending.push({threadId:t.id,content:value});save();online(false,"PC indisponível · mensagem guardada");showNotice("Falha ao enviar ("+(e&&e.message||"erro desconhecido")+"). A mensagem ficou guardada neste telemóvel e continua pendente.")}}
+async function send(){const value=el.input.value.trim();if(!value)return;let t=active()||localThread();const pending={id:"pending-"+makeId(),role:"user",content:value,created_at:new Date().toISOString(),state:"pending"};t.messages.push(pending);t.updated_at=pending.created_at;el.input.value="";save();renderChat();if(!(await connect())){state.pending.push({threadId:t.id,content:value});save();showNotice("Mensagem guardada neste telemóvel, mas NÃO enviada: não foi possível localizar o PC DGM-MAT.");return}try{t=await serverThread(t);const r=await api("/mobile/threads/"+encodeURIComponent(t.id)+"/messages",{method:"POST",body:JSON.stringify({content:value})});if(!r.ok)throw Error(r.status);const d=await r.json(),i=state.threads.findIndex(function(x){return x.id===t.id});if(i>=0)state.threads[i]=d.thread;save();renderChat();showIntent(d.intent);const latest=(state.threads.find(function(x){return x.id===t.id})||{}).messages||[];const reply=[...latest].reverse().find(function(m){return m.role!=="user"&&m.content});if(reply)speakText(reply.content)}catch(e){state.pending.push({threadId:t.id,content:value});save();online(false,"PC indisponível · mensagem guardada");showNotice("Falha ao enviar ("+(e&&e.message||"erro desconhecido")+"). A mensagem ficou guardada neste telemóvel e continua pendente.")}}
 async function flush(){if(!(await connect()))return;for(const item of state.pending.slice()){try{let t=state.threads.find(function(x){return x.id===item.threadId});if(!t)continue;t=await serverThread(t);const r=await api("/mobile/threads/"+encodeURIComponent(t.id)+"/messages",{method:"POST",body:JSON.stringify({content:item.content})});if(!r.ok)throw Error(r.status);const d=await r.json(),i=state.threads.findIndex(function(x){return x.id===t.id});if(i>=0)state.threads[i]=d.thread;state.pending=state.pending.filter(function(x){return x!==item});save();showIntent(d.intent)}catch(e){break}}renderChat()}
 async function rename(){const t=active();if(!t)return;el.renameInput.value=t.title||"Nova conversa";el.dialog.showModal()}
 document.getElementById("saveRename").addEventListener("click",async function(e){e.preventDefault();const title=el.renameInput.value.trim(),t=active();if(!title||!t)return;if(t.id.startsWith("local-"))t.title=title;else if(await connect()){const r=await api("/mobile/threads/"+encodeURIComponent(t.id)+"/rename",{method:"POST",body:JSON.stringify({title:title})});if(r.ok){const s=await r.json(),i=state.threads.findIndex(function(x){return x.id===t.id});if(i>=0)state.threads[i]=s}}save();renderChat();el.dialog.close()});
 document.getElementById("newChat").onclick=function(){localThread();el.drawer.classList.remove("open")};document.getElementById("openDrawer").onclick=function(){el.drawer.classList.add("open")};document.getElementById("closeDrawer").onclick=function(){el.drawer.classList.remove("open")};document.getElementById("renameButton").onclick=rename;el.title.onclick=rename;document.getElementById("refresh").onclick=load;el.list.onclick=function(e){const b=e.target.closest("[data-id]");if(b)select(b.dataset.id)};document.getElementById("composer").onsubmit=function(e){e.preventDefault();send()};el.input.addEventListener("input",function(){el.input.style.height="auto";el.input.style.height=Math.min(el.input.scrollHeight,160)+"px"});el.input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});window.addEventListener("error",function(e){try{showNotice("Erro na interface: "+(e.message||"JavaScript"))}catch(_){}});window.addEventListener("unhandledrejection",function(e){try{showNotice("Erro inesperado: "+(e.reason&&e.reason.message||e.reason||"desconhecido"))}catch(_){}});window.addEventListener("online",flush);if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){});load();setInterval(function(){if(!document.hidden)flush()},15000);
 
+
+// Cockpit navigation: only call existing read endpoints; unavailable APIs are reported honestly.
+const cockpitPanels = {
+  projects: {title:"Projetos e repositórios", endpoint:"/runtime/workspace/scan", summary:"Projetos e repositórios detetados pelo PC."},
+  agents: {title:"Agentes e departamentos", endpoint:"/runtime/status", summary:"Estado observado do runtime e agentes reportados pelo PC."},
+  providers: {title:"IAs e providers", endpoint:"/runtime/providers", summary:"Estado do registo e disponibilidade observada dos providers; não altera configurações."},
+  missions: {title:"Missões e atividade", endpoint:"/runtime/missions", summary:"Missões registadas e respetivo estado."},
+  approvals: {title:"Aprovações e segurança", endpoint:"/runtime/approvals", summary:"Consulta de aprovações, se o backend disponibilizar este endpoint."}
+};
+const cockpitDialog=document.getElementById("cockpitDialog");
+async function openCockpitPanel(name){
+  const panel=cockpitPanels[name]; if(!panel)return;
+  document.getElementById("cockpitTitle").textContent=panel.title;
+  document.getElementById("cockpitSummary").textContent=panel.summary;
+  const body=document.getElementById("cockpitContent");
+  body.textContent="A consultar o DGM-MAT no PC…";
+  el.drawer.classList.remove("open"); cockpitDialog.showModal();
+  try{
+    if(!(await discover()))throw Error("PC não encontrado. Esta vista requer ligação ao PC.");
+    const response=await api(panel.endpoint);
+    const data=await response.json().catch(function(){return{}});
+    if(!response.ok)throw Error((data&&data.detail)||("HTTP "+response.status));
+    body.textContent=JSON.stringify(data,null,2);
+    document.getElementById("cockpitSummary").textContent="Dados recebidos do backend · "+panel.summary;
+  }catch(error){
+    body.textContent="Esta função não está disponível neste momento.\n"+((error&&error.message)||String(error))+"\n\nNão foram efetuadas alterações.";
+    document.getElementById("cockpitSummary").textContent="Consulta indisponível; não foram inventados resultados.";
+  }
+}
+document.querySelectorAll("[data-panel]").forEach(function(button){
+  button.addEventListener("click",function(){openCockpitPanel(button.dataset.panel)});
+});
+
+// Voice is progressive enhancement: use Android/WebView speech APIs only when available.
+let voiceReplies=false;
+let recognition=null;
+function voiceNotice(message){showNotice(message)}
+function speakText(text){
+  if(!voiceReplies||!("speechSynthesis" in window)||!text)return;
+  try{window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(text);utterance.lang="pt-PT";window.speechSynthesis.speak(utterance)}catch(error){voiceNotice("A leitura em voz alta não está disponível neste dispositivo.")}
+}
+document.getElementById("speakToggle").addEventListener("click",function(){
+  voiceReplies=!voiceReplies;
+  this.classList.toggle("voice-active",voiceReplies);
+  this.textContent=voiceReplies?"🔈":"🔊";
+  if(!voiceReplies&&"speechSynthesis" in window)window.speechSynthesis.cancel();
+  voiceNotice(voiceReplies?"Respostas faladas ativadas.":"Respostas faladas desativadas.");
+});
+document.getElementById("voiceInput").addEventListener("click",function(){
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecognition){voiceNotice("O reconhecimento de voz não está disponível neste Android/WebView. Usa o microfone do teclado ou atualiza o WebView/serviço de voz.");return}
+  if(recognition){try{recognition.stop()}catch(e){}recognition=null;this.classList.remove("voice-active");this.textContent="🎙";return}
+  try{
+    recognition=new SpeechRecognition();recognition.lang="pt-PT";recognition.interimResults=true;recognition.continuous=false;
+    this.classList.add("voice-active");this.textContent="■";
+    recognition.onresult=function(event){
+      let transcript="",finalResult=false;
+      for(let i=event.resultIndex;i<event.results.length;i++){transcript+=event.results[i][0].transcript;if(event.results[i].isFinal)finalResult=true}
+      if(transcript)el.input.value=transcript.trim();
+      el.input.style.height="auto";el.input.style.height=Math.min(el.input.scrollHeight,160)+"px";
+      if(finalResult&&el.input.value.trim()){const message=el.input.value.trim();recognition=null;document.getElementById("voiceInput").classList.remove("voice-active");document.getElementById("voiceInput").textContent="🎙";send();}
+    };
+    recognition.onerror=function(event){voiceNotice("Falha no reconhecimento de voz: "+(event.error||"erro desconhecido"));};
+    recognition.onend=function(){recognition=null;document.getElementById("voiceInput").classList.remove("voice-active");document.getElementById("voiceInput").textContent="🎙";};
+    recognition.start();voiceNotice("A ouvir em português. Fala agora; confirma as ações sensíveis antes de as executar.");
+  }catch(error){recognition=null;this.classList.remove("voice-active");this.textContent="🎙";voiceNotice("Não foi possível iniciar o microfone: "+((error&&error.message)||String(error)))}
+});
 
 // USB/ADB recovery controls. API authorization remains fail-closed; a 401 is
 // shown honestly rather than attempting to bypass PC-side session security.
