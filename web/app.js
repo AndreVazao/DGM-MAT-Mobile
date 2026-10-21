@@ -1,18 +1,20 @@
 // Path: C:\ProgramasGodMode\DGM-MAT-Mobile\web\app.js
 const RENDEZVOUS="https://dgm-mat-rendezvous.vercel.app/api/rendezvous?public=1&node=PC-Vazao-Anjos";
 const STORAGE="dgm-mat-mobile-state-v1";
+const SESSION_STORAGE="dgm-mat-mobile-session-v1";
+let session={};try{session=JSON.parse(localStorage.getItem(SESSION_STORAGE)||"{}")}catch(e){session={}}
 let state={};try{state=JSON.parse(localStorage.getItem(STORAGE)||"{}")}catch(e){try{localStorage.removeItem(STORAGE)}catch(_){}state={}}
 state.threads=Array.isArray(state.threads)?state.threads:[];state.activeId=state.activeId||null;state.apiBase=state.apiBase||"";state.pending=Array.isArray(state.pending)?state.pending:[];
 const el={drawer:document.getElementById("drawer"),list:document.getElementById("threadList"),chat:document.getElementById("chat"),input:document.getElementById("input"),dot:document.getElementById("dot"),connection:document.getElementById("connectionText"),title:document.getElementById("titleButton"),context:document.getElementById("contextLine"),intent:document.getElementById("intentBar"),dialog:document.getElementById("renameDialog"),renameInput:document.getElementById("renameInput"),endpoint:document.getElementById("endpointLabel")};
 function save(){try{localStorage.setItem(STORAGE,JSON.stringify(state))}catch(e){showNotice("Não foi possível guardar o estado local neste dispositivo.")}}
 function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]})}
 function makeId(){return typeof crypto!=="undefined"&&typeof crypto.randomUUID==="function"?crypto.randomUUID():""+Date.now()+"-"+Math.random().toString(36).slice(2)}
-function api(path,opt){opt=opt||{};opt.headers=Object.assign({"Content-Type":"application/json"},opt.headers||{});return fetch(state.apiBase+path,opt)}
+function api(path,opt){opt=opt||{};opt.headers=Object.assign({"Content-Type":"application/json"},opt.headers||{});if(session.access_token&&Number(session.expires_at)>Date.now()/1000)opt.headers.Authorization="Bearer "+session.access_token;else if(session.access_token){session={};try{localStorage.removeItem(SESSION_STORAGE)}catch(e){}}return fetch(state.apiBase+path,opt)}
 function online(ok,msg){el.dot.classList.toggle("online",ok);el.connection.textContent=msg}
 function isNativeApp(){return Boolean(window.Capacitor&&typeof window.Capacitor.isNativePlatform==="function"&&window.Capacitor.isNativePlatform())}
 document.documentElement.classList.toggle("native-app",isNativeApp());
 async function discover(){const native=isNativeApp();if(!native&&(location.hostname.includes("tail")||location.hostname.match(/^100\./)||location.hostname==="localhost"||location.hostname==="127.0.0.1")){state.apiBase="";save();return true}try{const r=await fetch(RENDEZVOUS,{cache:"no-store"});if(!r.ok)throw Error("rendezvous HTTP "+r.status);const d=await r.json();const endpoint=d&&d.node&&d.node.endpoint;if(endpoint){state.apiBase=String(endpoint).replace(/\/$/,"");save();return true}state.apiBase="";save();return false}catch(e){state.apiBase="";save();return false}}
-async function connect(){if(!(await discover())){online(false,"PC não encontrado · modo offline");return false}try{const r=await api("/mobile/status");if(!r.ok)throw Error(r.status);const d=await r.json();online(true,"PC ligado · DGM-MAT pronto");el.endpoint.textContent=d.tailscale&&d.tailscale.hostname||"PC";return true}catch(e){online(false,"PC indisponível · modo offline");return false}}
+async function connect(){if(!(await discover())){online(false,"PC não encontrado · modo offline");return false}try{const r=await api("/mobile/status");if(r.status===401||r.status===403){online(false,"PC encontrado · emparelhamento necessário");return false}if(!r.ok)throw Error(r.status);const d=await r.json();online(true,"PC ligado · DGM-MAT pronto");el.endpoint.textContent=d.tailscale&&d.tailscale.hostname||"PC";return true}catch(e){online(false,"PC indisponível · modo offline");return false}}
 function active(){return state.threads.find(function(t){return t.id===state.activeId})||null}
 function renderThreads(){el.list.innerHTML=state.threads.map(function(t){return '<button class="thread '+(t.id===state.activeId?"active":"")+'" data-id="'+esc(t.id)+'"><span class="thread-title">'+esc(t.title||"Nova conversa")+'</span><span class="thread-meta">'+new Date(t.updated_at||Date.now()).toLocaleString("pt-PT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+'</span></button>'}).join("")}
 function renderChat(){const t=active();el.title.textContent=t&&t.title||"Nova conversa";el.context.textContent=t&&t.repository?(t.repository+(t.project?" · "+t.project:"")):"DGM-MAT · conversa contínua";el.chat.innerHTML=(t&&t.messages||[]).map(function(m){return '<div class="message-row '+(m.role==="user"?"user":"")+'"><div class="message '+(m.role==="user"?"user":"assistant")+' '+(m.state==="pending"?"pending":"")+'">'+esc(m.content)+'<div class="meta">'+(m.role==="user"?"Tu":"DGM-MAT")+" · "+new Date(m.created_at||Date.now()).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"})+(m.state==="pending"?" · pendente":"")+"</div></div></div>"}).join("");el.chat.scrollTop=el.chat.scrollHeight;renderThreads()}
@@ -91,3 +93,28 @@ document.getElementById("usbRestart").addEventListener("click",function(){
 document.getElementById("usbInstall").addEventListener("click",function(){
   if(window.confirm("Confirmas reinstalar o APK DGM-MAT no único telemóvel ADB autorizado? A opção -r preserva os dados da aplicação. Não será executado se não existir um APK válido."))usbAction("install-apk",true);
 });
+
+
+async function pairMobileClient(){
+  const input=document.getElementById("usbPairCode");
+  const code=input.value.trim();
+  if(!code){usbStatus.textContent="Introduz o código gerado no browser do PC.";return}
+  usbStatus.textContent="A validar o código de emparelhamento…";
+  try{
+    if(!(await discover()))throw Error("PC não encontrado. Confirma a ligação e o rendezvous.");
+    const response=await fetch(state.apiBase+"/auth/pair",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:code,client_id:"dgm-mat-mobile-android"})});
+    const body=await response.json().catch(function(){return{}});
+    if(!response.ok)throw Error(body.detail||("HTTP "+response.status));
+    session={access_token:body.access_token,expires_at:body.expires_at,session_id:body.session_id};
+    localStorage.setItem(SESSION_STORAGE,JSON.stringify(session));
+    input.value="";
+    usbStatus.textContent="Telemóvel emparelhado com sessão temporária. A carregar estado do DGM-MAT…";
+    usbPrint({status:"paired",expires_at:body.expires_at,scopes:body.scopes});
+    await load();
+    await usbLoadState();
+  }catch(error){
+    usbStatus.textContent="Emparelhamento não concluído.";
+    usbPrint((error&&error.message)||String(error));
+  }
+}
+document.getElementById("usbPair").addEventListener("click",pairMobileClient);
