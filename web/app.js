@@ -28,3 +28,66 @@ async function flush(){if(!(await connect()))return;for(const item of state.pend
 async function rename(){const t=active();if(!t)return;el.renameInput.value=t.title||"Nova conversa";el.dialog.showModal()}
 document.getElementById("saveRename").addEventListener("click",async function(e){e.preventDefault();const title=el.renameInput.value.trim(),t=active();if(!title||!t)return;if(t.id.startsWith("local-"))t.title=title;else if(await connect()){const r=await api("/mobile/threads/"+encodeURIComponent(t.id)+"/rename",{method:"POST",body:JSON.stringify({title:title})});if(r.ok){const s=await r.json(),i=state.threads.findIndex(function(x){return x.id===t.id});if(i>=0)state.threads[i]=s}}save();renderChat();el.dialog.close()});
 document.getElementById("newChat").onclick=function(){localThread();el.drawer.classList.remove("open")};document.getElementById("openDrawer").onclick=function(){el.drawer.classList.add("open")};document.getElementById("closeDrawer").onclick=function(){el.drawer.classList.remove("open")};document.getElementById("renameButton").onclick=rename;el.title.onclick=rename;document.getElementById("refresh").onclick=load;el.list.onclick=function(e){const b=e.target.closest("[data-id]");if(b)select(b.dataset.id)};document.getElementById("composer").onsubmit=function(e){e.preventDefault();send()};el.input.addEventListener("input",function(){el.input.style.height="auto";el.input.style.height=Math.min(el.input.scrollHeight,160)+"px"});el.input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});window.addEventListener("error",function(e){try{showNotice("Erro na interface: "+(e.message||"JavaScript"))}catch(_){}});window.addEventListener("unhandledrejection",function(e){try{showNotice("Erro inesperado: "+(e.reason&&e.reason.message||e.reason||"desconhecido"))}catch(_){}});window.addEventListener("online",flush);if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){});load();setInterval(function(){if(!document.hidden)flush()},15000);
+
+
+// USB/ADB recovery controls. API authorization remains fail-closed; a 401 is
+// shown honestly rather than attempting to bypass PC-side session security.
+const usbDialog=document.getElementById("usbDialog");
+const usbStatus=document.getElementById("usbStatus");
+const usbReport=document.getElementById("usbReport");
+function usbPrint(value){usbReport.textContent=typeof value==="string"?value:JSON.stringify(value,null,2)}
+async function usbRequest(path,opt){
+  if(!(await discover()))throw Error("PC não encontrado pelo rendezvous. O monitor ADB, se ativo, continua a funcionar localmente no PC.");
+  const response=await api(path,opt||{});
+  const body=await response.json().catch(function(){return{}});
+  if(!response.ok){
+    if(response.status===401||response.status===403)throw Error("O PC recusou o pedido por falta de sessão autenticada. O emparelhamento remoto seguro ainda precisa de ser concluído; não vamos contornar a segurança.");
+    throw Error(body.detail||("HTTP "+response.status));
+  }
+  return body;
+}
+async function usbLoadState(){
+  usbStatus.textContent="A consultar o monitor USB/ADB do PC…";
+  usbPrint("A carregar diagnóstico…");
+  try{
+    const data=await usbRequest("/mobile/usb-recovery/state");
+    usbStatus.textContent="Monitor: "+(data.status||"desconhecido")+" · "+(data.enabled?"ativo":"inativo");
+    usbPrint(data);
+  }catch(error){
+    usbStatus.textContent="Monitorização automática é executada no PC; estado remoto indisponível.";
+    usbPrint((error&&error.message)||String(error));
+  }
+}
+async function usbAction(action,confirmInstall){
+  usbStatus.textContent="A executar: "+action+"…";
+  try{
+    const data=await usbRequest("/mobile/usb-recovery/repair",{method:"POST",body:JSON.stringify({action:action,confirm_install:Boolean(confirmInstall)})});
+    usbStatus.textContent="Resultado: "+(data.status||"sem estado")+" · "+action;
+    usbPrint(data);
+  }catch(error){
+    usbStatus.textContent="Não foi possível executar a ação.";
+    usbPrint((error&&error.message)||String(error));
+  }
+}
+document.getElementById("openUsbSettings").addEventListener("click",function(){
+  el.drawer.classList.remove("open");
+  usbDialog.showModal();
+  usbLoadState();
+});
+document.getElementById("usbDiagnose").addEventListener("click",async function(){
+  try{
+    const data=await usbRequest("/mobile/usb-recovery/diagnose");
+    usbStatus.textContent="Diagnóstico concluído.";
+    usbPrint(data);
+  }catch(error){
+    usbStatus.textContent="Diagnóstico remoto indisponível.";
+    usbPrint((error&&error.message)||String(error));
+  }
+});
+document.getElementById("usbReconnect").addEventListener("click",function(){usbAction("reconnect-offline",false)});
+document.getElementById("usbRestart").addEventListener("click",function(){
+  if(window.confirm("Reiniciar o serviço ADB do PC? Isto pode interromper momentaneamente outras sessões ADB, mas não apaga dados."))usbAction("restart-adb-server",false);
+});
+document.getElementById("usbInstall").addEventListener("click",function(){
+  if(window.confirm("Confirmas reinstalar o APK DGM-MAT no único telemóvel ADB autorizado? A opção -r preserva os dados da aplicação. Não será executado se não existir um APK válido."))usbAction("install-apk",true);
+});
