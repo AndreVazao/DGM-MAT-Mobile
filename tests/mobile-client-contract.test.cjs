@@ -39,3 +39,17 @@ test("native Android app keeps the header below the Android status bar safe area
   assert.match(css, /\.native-app \.app\{padding-top:max\(env\(safe-area-inset-top\),56px\)\}/);
   assert.match(css, /\.native-app \.drawer\{top:max\(env\(safe-area-inset-top\),56px\)\}/);
 });
+
+
+test("USB recovery settings are visible and never bypass API authentication", () => {
+  const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
+  assert.match(html, /openUsbSettings/);
+  assert.match(html, /usbDiagnose/);
+  assert.match(html, /usbReconnect/);
+  assert.match(html, /usbRestart/);
+  assert.match(html, /usbInstall/);
+  assert.match(app, /\/mobile\/usb-recovery\/diagnose/);
+  assert.match(app, /\/mobile\/usb-recovery\/state/);
+  assert.match(app, /O emparelhamento remoto seguro ainda precisa de ser concluído/);
+  assert.match(app, /confirm_install:Boolean\(confirmInstall\)/);
+});
