@@ -53,3 +53,15 @@ test("USB recovery settings are visible and never bypass API authentication", ()
   assert.match(app, /O emparelhamento remoto seguro ainda precisa de ser concluído/);
   assert.match(app, /confirm_install:Boolean\(confirmInstall\)/);
 });
+
+
+test("mobile pairing uses a one-time code and short-lived bearer session", () => {
+  const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
+  assert.match(html, /usbPairCode/);
+  assert.match(html, /usbPair/);
+  assert.match(html, /auth\/pairing-code/);
+  assert.match(app, /SESSION_STORAGE/);
+  assert.match(app, /Authorization="Bearer "\+session\.access_token/);
+  assert.match(app, /fetch\(state\.apiBase\+"\/auth\/pair"/);
+  assert.match(app, /expires_at:body\.expires_at/);
+});
