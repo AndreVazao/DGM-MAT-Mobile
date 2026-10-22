@@ -20,3 +20,31 @@
 .cockpit-dialog{width:min(94vw,560px);max-height:86dvh;overflow:auto}
 .cockpit-content{margin:0;max-height:52dvh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--text);background:var(--bg);padding:12px;border:1px solid var(--line);border-radius:12px}
 @media(min-width:800px){.cockpit-menu{max-height:unset}.menu-option{font-size:13px}}
+
+
+/* Virtual office: live telemetry only; no simulated agent activity. */
+.office-live{display:grid;gap:12px;font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+.office-live-heading{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px}
+.office-live-dot{width:8px;height:8px;border-radius:50%;background:var(--good);flex:0 0 auto}
+.office-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.office-metrics article,.office-dept{min-width:0;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.office-metrics article span{display:block;color:var(--muted);font-size:10px}
+.office-metrics article strong{display:block;font-size:22px;margin-top:3px}
+.office-runtime{display:flex;flex-wrap:wrap;gap:8px 14px;color:var(--muted);font-size:11px}
+.office-runtime strong{color:var(--text)}
+.office-live h3{margin:4px 0 0;font-size:13px}
+.office-departments{display:grid;grid-template-columns:1fr;gap:7px}
+.office-dept-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.office-dept-top strong{font-size:12px}
+.office-dept p{margin:6px 0 0;color:var(--muted);font-size:10px}
+.office-state{flex:0 0 auto;padding:3px 7px;border-radius:999px;border:1px solid var(--line);font-size:9px;color:var(--muted)}
+.office-state.active{color:var(--good);border-color:#2d7059}
+.office-state.waiting{color:#f4cc7b;border-color:#806b3c}
+.office-state.degraded{color:var(--danger);border-color:#80424a}
+.office-activity-list{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.office-activity{padding:9px 10px;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.office-activity div{display:flex;justify-content:space-between;gap:8px;font-size:11px}
+.office-activity small,.office-activity>span{display:block;margin-top:4px;color:var(--muted);font-size:10px}
+.office-empty{padding:12px;color:var(--muted);font-size:11px;border:1px dashed var(--line);border-radius:10px}
+.office-truth-note{margin:0;color:var(--muted);font-size:10px;line-height:1.5}
+@media(min-width:520px){.office-departments{grid-template-columns:repeat(2,minmax(0,1fr))}}
