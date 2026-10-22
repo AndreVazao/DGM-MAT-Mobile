@@ -89,3 +89,16 @@ test("voice controls degrade gracefully when Android WebView speech APIs are una
   assert.match(app, /speechSynthesis/);
   assert.match(app, /O reconhecimento de voz não está disponível neste Android\/WebView/);
 });
+
+
+test("mobile virtual office consumes authenticated read-only telemetry", () => {
+  const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
+  assert.match(html, /data-panel="office"/);
+  assert.match(app, /office: \{title:"Escritório virtual DGM-MAT", endpoint:"\/runtime\/office\/telemetry"/);
+  assert.match(app, /data\.schema!=="dgm-mat\.office-telemetry\.v1"/);
+  assert.match(app, /if\(name==="office"\)body\.innerHTML=renderOfficeTelemetry\(data\)/);
+  assert.match(app, /function renderOfficeTelemetry\(data\)/);
+  assert.match(app, /Sem telemetria/);
+  assert.match(app, /Não mostra objetivos de missão nem conteúdo de conversas/);
+  assert.doesNotMatch(app.slice(app.indexOf("function renderOfficeTelemetry"), app.indexOf("const cockpitDialog")), /mission\.goal/);
+});
