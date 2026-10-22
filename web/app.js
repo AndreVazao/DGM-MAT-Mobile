@@ -34,32 +34,87 @@ document.getElementById("newChat").onclick=function(){localThread();el.drawer.cl
 
 // Cockpit navigation: only call existing read endpoints; unavailable APIs are reported honestly.
 const cockpitPanels = {
+  office: {title:"Escritório virtual DGM-MAT", endpoint:"/runtime/office/telemetry", summary:"Telemetria real, minimizada e apenas de leitura; departamentos sem feed permanecem sem telemetria."},
   projects: {title:"Projetos e repositórios", endpoint:"/runtime/workspace/scan", summary:"Projetos e repositórios detetados pelo PC."},
   agents: {title:"Agentes e departamentos", endpoint:"/runtime/status", summary:"Estado observado do runtime e agentes reportados pelo PC."},
   providers: {title:"IAs e providers", endpoint:"/runtime/providers", summary:"Estado do registo e disponibilidade observada dos providers; não altera configurações."},
   missions: {title:"Missões e atividade", endpoint:"/runtime/missions", summary:"Missões registadas e respetivo estado."},
   approvals: {title:"Aprovações e segurança", endpoint:"/runtime/approvals", summary:"Consulta de aprovações, se o backend disponibilizar este endpoint."}
 };
+function renderOfficeTelemetry(data){
+  if(!data||data.schema!=="dgm-mat.office-telemetry.v1")throw Error("Contrato de telemetria do escritório desconhecido.");
+  const labels={active:"Ativo",waiting:"À espera",idle:"Em espera",unknown:"Sem telemetria",unavailable:"Indisponível",offline:"Offline",degraded:"Degradado"};
+  const stateClass={active:"active",waiting:"waiting",idle:"idle",unknown:"unknown",unavailable:"unknown",offline:"unknown",degraded:"degraded"};
+  const departments=[["engineering","Engenharia"],["approvals","Aprovações e segurança"],["operations","Operações"],["research","Investigação"],["memory","Memória"],["agents","Agentes"]];
+  const deptHtml=departments.map(function(item){
+    const d=data.departments&&data.departments[item[0]]||{};
+    const status=String(d.state||"unknown").toLowerCase();
+    const label=Object.prototype.hasOwnProperty.call(labels,status)?labels[status]:"Sem telemetria";
+    const detail=d.reason||"Não existe uma fonte observável para este estado.";
+    return '<article class="office-dept"><div class="office-dept-top"><strong>'+esc(item[1])+'</strong><span class="office-state '+(stateClass[status]||"unknown")+'">'+label+'</span></div><p>'+esc(detail)+'</p></article>';
+  }).join("");
+  const missions=data.missions||{}, counts=missions.counts||{}, active=Number(counts.RUNNING||0);
+  const waiting=Number((data.departments&&data.departments.approvals&&data.departments.approvals.waiting_decisions)||0);
+  const total=Number(missions.total||0), queue=data.queue_worker||{};
+  const recent=Array.isArray(missions.recent)?missions.recent.slice(0,8):[];
+  const recentHtml=recent.length?recent.map(function(m){
+    const id=String(m.mission_id||"missão").slice(0,18), status=String(m.status||"unknown");
+    const when=m.updated_at?new Date(m.updated_at).toLocaleString("pt-PT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"hora desconhecida";
+    const handler=m.handler?'<span>Executor: '+esc(m.handler)+'</span>':"";
+    return '<li class="office-activity"><div><strong>'+esc(id)+'</strong><span>'+esc(status)+'</span></div><small>'+esc(when)+'</small>'+handler+'</li>';
+  }).join(""):'<li class="office-empty">Ainda não existem missões persistidas para apresentar.</li>';
+  const organization=data.organization||null;
+  const declaredDepartments=organization&&Array.isArray(organization.departments)?organization.departments:[];
+  const declaredAgents=organization&&Array.isArray(organization.agents)?organization.agents:[];
+  const rosterDepartments=declaredDepartments.map(function(d){
+    const capabilities=Array.isArray(d.capabilities)?d.capabilities.join(" · "):"";
+    return '<article class="office-roster-card"><strong>'+esc(d.name||d.department_id||"Departamento")+'</strong><p>'+esc(d.mission||"Sem descrição declarada.")+'</p><small>Capacidades: '+esc(capabilities||"não declaradas")+'</small><span class="office-roster-state">Atividade: sem telemetria</span></article>';
+  }).join("");
+  const rosterAgents=declaredAgents.map(function(a){
+    return '<article class="office-roster-card"><strong>'+esc(a.name||a.agent_id||"Agente")+'</strong><p>'+esc(a.role||"Papel não declarado")+' · '+esc(a.department_id||"sem departamento")+'</p><small>Maturidade: '+esc(a.execution_maturity||"ROLE_DEFINED_ONLY")+'</small><span class="office-roster-state">Atividade: sem telemetria</span><small>'+esc(a.activation_blocker||"Ativação não verificada")+'</small></article>';
+  }).join("");
+  const rosterHtml=organization
+    ? '<details class="office-roster"><summary>Estrutura declarada · '+declaredDepartments.length+' departamentos · '+declaredAgents.length+' funções</summary><h4>Departamentos definidos</h4><div class="office-roster-grid">'+rosterDepartments+'</div><h4>Agentes definidos</h4><div class="office-roster-grid">'+rosterAgents+'</div><p class="office-truth-note">'+esc(organization.activity_policy||"O catálogo define papéis; não comprova trabalhadores ativos.")+'</p></details>'
+    : '<p class="office-empty">O backend ainda não fornece o catálogo organizacional. A telemetria operacional continua disponível.</p>';
+  const runtime=data.runtime||{}, runtimeStatus=String(runtime.status||"unknown");
+  const runtimeLabel=runtime.is_degraded?"Degradado":(runtimeStatus==="unknown"?"Desconhecido":runtimeStatus);
+  return '<div class="office-live"><div class="office-live-heading"><span class="office-snapshot-dot"></span><span>Snapshot observado · '+esc(data.generated_at||"hora desconhecida")+'</span></div>'+
+    '<div class="office-metrics"><article><span>Missões registadas</span><strong>'+total+'</strong></article><article><span>Em execução</span><strong>'+active+'</strong></article><article><span>Decisões pendentes</span><strong>'+waiting+'</strong></article></div>'+
+    '<div class="office-runtime"><span>Runtime: <strong>'+esc(runtimeLabel)+'</strong></span><span>Worker da fila: <strong>'+(queue.worker_alive===true?"ativo":queue.worker_alive===false?"inativo":"desconhecido")+'</strong></span></div>'+
+    '<h3>Departamentos observados</h3><div class="office-departments">'+deptHtml+'</div>'+rosterHtml+'<h3>Atividade recente</h3><ul class="office-activity-list">'+recentHtml+'</ul>'+
+    '<p class="office-truth-note">Esta vista só lê telemetria. Não mostra objetivos de missão nem conteúdo de conversas e não executa nem aprova ações. “Sem telemetria” significa que não existe feed real suficiente — não significa que o departamento esteja parado.</p></div>';
+}
 const cockpitDialog=document.getElementById("cockpitDialog");
-async function openCockpitPanel(name){
+let activeCockpitPanel=null;
+async function loadCockpitPanel(name){
   const panel=cockpitPanels[name]; if(!panel)return;
   document.getElementById("cockpitTitle").textContent=panel.title;
   document.getElementById("cockpitSummary").textContent=panel.summary;
   const body=document.getElementById("cockpitContent");
   body.textContent="A consultar o DGM-MAT no PC…";
-  el.drawer.classList.remove("open"); cockpitDialog.showModal();
   try{
     if(!(await discover()))throw Error("PC não encontrado. Esta vista requer ligação ao PC.");
     const response=await api(panel.endpoint);
     const data=await response.json().catch(function(){return{}});
     if(!response.ok)throw Error((data&&data.detail)||("HTTP "+response.status));
-    body.textContent=JSON.stringify(data,null,2);
-    document.getElementById("cockpitSummary").textContent="Dados recebidos do backend · "+panel.summary;
+    if(name==="office")body.innerHTML=renderOfficeTelemetry(data);
+    else body.textContent=JSON.stringify(data,null,2);
+    document.getElementById("cockpitSummary").textContent="Snapshot recebido do backend · "+panel.summary;
   }catch(error){
     body.textContent="Esta função não está disponível neste momento.\n"+((error&&error.message)||String(error))+"\n\nNão foram efetuadas alterações.";
     document.getElementById("cockpitSummary").textContent="Consulta indisponível; não foram inventados resultados.";
   }
 }
+async function openCockpitPanel(name){
+  if(!cockpitPanels[name])return;
+  activeCockpitPanel=name;
+  el.drawer.classList.remove("open");
+  if(!cockpitDialog.open)cockpitDialog.showModal();
+  await loadCockpitPanel(name);
+}
+document.getElementById("refreshCockpitPanel").addEventListener("click",function(){
+  if(activeCockpitPanel)loadCockpitPanel(activeCockpitPanel);
+});
 document.querySelectorAll("[data-panel]").forEach(function(button){
   button.addEventListener("click",function(){openCockpitPanel(button.dataset.panel)});
 });
