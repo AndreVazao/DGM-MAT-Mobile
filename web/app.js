@@ -85,13 +85,13 @@ function renderOfficeTelemetry(data){
     '<p class="office-truth-note">Esta vista só lê telemetria. Não mostra objetivos de missão nem conteúdo de conversas e não executa nem aprova ações. “Sem telemetria” significa que não existe feed real suficiente — não significa que o departamento esteja parado.</p></div>';
 }
 const cockpitDialog=document.getElementById("cockpitDialog");
-async function openCockpitPanel(name){
+let activeCockpitPanel=null;
+async function loadCockpitPanel(name){
   const panel=cockpitPanels[name]; if(!panel)return;
   document.getElementById("cockpitTitle").textContent=panel.title;
   document.getElementById("cockpitSummary").textContent=panel.summary;
   const body=document.getElementById("cockpitContent");
   body.textContent="A consultar o DGM-MAT no PC…";
-  el.drawer.classList.remove("open"); cockpitDialog.showModal();
   try{
     if(!(await discover()))throw Error("PC não encontrado. Esta vista requer ligação ao PC.");
     const response=await api(panel.endpoint);
@@ -99,12 +99,22 @@ async function openCockpitPanel(name){
     if(!response.ok)throw Error((data&&data.detail)||("HTTP "+response.status));
     if(name==="office")body.innerHTML=renderOfficeTelemetry(data);
     else body.textContent=JSON.stringify(data,null,2);
-    document.getElementById("cockpitSummary").textContent="Dados recebidos do backend · "+panel.summary;
+    document.getElementById("cockpitSummary").textContent="Snapshot recebido do backend · "+panel.summary;
   }catch(error){
     body.textContent="Esta função não está disponível neste momento.\n"+((error&&error.message)||String(error))+"\n\nNão foram efetuadas alterações.";
     document.getElementById("cockpitSummary").textContent="Consulta indisponível; não foram inventados resultados.";
   }
 }
+async function openCockpitPanel(name){
+  if(!cockpitPanels[name])return;
+  activeCockpitPanel=name;
+  el.drawer.classList.remove("open");
+  if(!cockpitDialog.open)cockpitDialog.showModal();
+  await loadCockpitPanel(name);
+}
+document.getElementById("refreshCockpitPanel").addEventListener("click",function(){
+  if(activeCockpitPanel)loadCockpitPanel(activeCockpitPanel);
+});
 document.querySelectorAll("[data-panel]").forEach(function(button){
   button.addEventListener("click",function(){openCockpitPanel(button.dataset.panel)});
 });
