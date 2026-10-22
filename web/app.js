@@ -63,12 +63,25 @@ function renderOfficeTelemetry(data){
     const handler=m.handler?'<span>Executor: '+esc(m.handler)+'</span>':"";
     return '<li class="office-activity"><div><strong>'+esc(id)+'</strong><span>'+esc(status)+'</span></div><small>'+esc(when)+'</small>'+handler+'</li>';
   }).join(""):'<li class="office-empty">Ainda não existem missões persistidas para apresentar.</li>';
+  const organization=data.organization||null;
+  const declaredDepartments=organization&&Array.isArray(organization.departments)?organization.departments:[];
+  const declaredAgents=organization&&Array.isArray(organization.agents)?organization.agents:[];
+  const rosterDepartments=declaredDepartments.map(function(d){
+    const capabilities=Array.isArray(d.capabilities)?d.capabilities.join(" · "):"";
+    return '<article class="office-roster-card"><strong>'+esc(d.name||d.department_id||"Departamento")+'</strong><p>'+esc(d.mission||"Sem descrição declarada.")+'</p><small>Capacidades: '+esc(capabilities||"não declaradas")+'</small><span class="office-roster-state">Atividade: sem telemetria</span></article>';
+  }).join("");
+  const rosterAgents=declaredAgents.map(function(a){
+    return '<article class="office-roster-card"><strong>'+esc(a.name||a.agent_id||"Agente")+'</strong><p>'+esc(a.role||"Papel não declarado")+' · '+esc(a.department_id||"sem departamento")+'</p><small>Maturidade: '+esc(a.execution_maturity||"ROLE_DEFINED_ONLY")+'</small><span class="office-roster-state">Atividade: sem telemetria</span><small>'+esc(a.activation_blocker||"Ativação não verificada")+'</small></article>';
+  }).join("");
+  const rosterHtml=organization
+    ? '<details class="office-roster"><summary>Estrutura declarada · '+declaredDepartments.length+' departamentos · '+declaredAgents.length+' funções</summary><h4>Departamentos definidos</h4><div class="office-roster-grid">'+rosterDepartments+'</div><h4>Agentes definidos</h4><div class="office-roster-grid">'+rosterAgents+'</div><p class="office-truth-note">'+esc(organization.activity_policy||"O catálogo define papéis; não comprova trabalhadores ativos.")+'</p></details>'
+    : '<p class="office-empty">O backend ainda não fornece o catálogo organizacional. A telemetria operacional continua disponível.</p>';
   const runtime=data.runtime||{}, runtimeStatus=String(runtime.status||"unknown");
   const runtimeLabel=runtime.is_degraded?"Degradado":(runtimeStatus==="unknown"?"Desconhecido":runtimeStatus);
   return '<div class="office-live"><div class="office-live-heading"><span class="office-live-dot"></span><span>Snapshot observado · '+esc(data.generated_at||"hora desconhecida")+'</span></div>'+
     '<div class="office-metrics"><article><span>Missões registadas</span><strong>'+total+'</strong></article><article><span>Em execução</span><strong>'+active+'</strong></article><article><span>Decisões pendentes</span><strong>'+waiting+'</strong></article></div>'+
     '<div class="office-runtime"><span>Runtime: <strong>'+esc(runtimeLabel)+'</strong></span><span>Worker da fila: <strong>'+(queue.worker_alive===true?"ativo":queue.worker_alive===false?"inativo":"desconhecido")+'</strong></span></div>'+
-    '<h3>Departamentos observados</h3><div class="office-departments">'+deptHtml+'</div><h3>Atividade recente</h3><ul class="office-activity-list">'+recentHtml+'</ul>'+
+    '<h3>Departamentos observados</h3><div class="office-departments">'+deptHtml+'</div>'+rosterHtml+'<h3>Atividade recente</h3><ul class="office-activity-list">'+recentHtml+'</ul>'+
     '<p class="office-truth-note">Esta vista só lê telemetria. Não mostra objetivos de missão nem conteúdo de conversas e não executa nem aprova ações. “Sem telemetria” significa que não existe feed real suficiente — não significa que o departamento esteja parado.</p></div>';
 }
 const cockpitDialog=document.getElementById("cockpitDialog");
