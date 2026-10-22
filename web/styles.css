@@ -25,7 +25,7 @@
 /* Virtual office: live telemetry only; no simulated agent activity. */
 .office-live{display:grid;gap:12px;font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
 .office-live-heading{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px}
-.office-live-dot{width:8px;height:8px;border-radius:50%;background:var(--good);flex:0 0 auto}
+.office-snapshot-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
 .office-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
 .office-metrics article,.office-dept{min-width:0;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
 .office-metrics article span{display:block;color:var(--muted);font-size:10px}
