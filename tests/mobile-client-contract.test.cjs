@@ -99,6 +99,10 @@ test("mobile virtual office consumes authenticated read-only telemetry", () => {
   assert.match(app, /if\(name==="office"\)body\.innerHTML=renderOfficeTelemetry\(data\)/);
   assert.match(app, /function renderOfficeTelemetry\(data\)/);
   assert.match(app, /Sem telemetria/);
+  assert.match(app, /declaredDepartments/);
+  assert.match(app, /declaredAgents/);
+  assert.match(app, /Atividade: sem telemetria/);
+  assert.match(app, /organization\.activity_policy/);
   assert.match(app, /Não mostra objetivos de missão nem conteúdo de conversas/);
   assert.doesNotMatch(app.slice(app.indexOf("function renderOfficeTelemetry"), app.indexOf("const cockpitDialog")), /mission\.goal/);
 });
