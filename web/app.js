@@ -78,7 +78,7 @@ function renderOfficeTelemetry(data){
     : '<p class="office-empty">O backend ainda não fornece o catálogo organizacional. A telemetria operacional continua disponível.</p>';
   const runtime=data.runtime||{}, runtimeStatus=String(runtime.status||"unknown");
   const runtimeLabel=runtime.is_degraded?"Degradado":(runtimeStatus==="unknown"?"Desconhecido":runtimeStatus);
-  return '<div class="office-live"><div class="office-live-heading"><span class="office-live-dot"></span><span>Snapshot observado · '+esc(data.generated_at||"hora desconhecida")+'</span></div>'+
+  return '<div class="office-live"><div class="office-live-heading"><span class="office-snapshot-dot"></span><span>Snapshot observado · '+esc(data.generated_at||"hora desconhecida")+'</span></div>'+
     '<div class="office-metrics"><article><span>Missões registadas</span><strong>'+total+'</strong></article><article><span>Em execução</span><strong>'+active+'</strong></article><article><span>Decisões pendentes</span><strong>'+waiting+'</strong></article></div>'+
     '<div class="office-runtime"><span>Runtime: <strong>'+esc(runtimeLabel)+'</strong></span><span>Worker da fila: <strong>'+(queue.worker_alive===true?"ativo":queue.worker_alive===false?"inativo":"desconhecido")+'</strong></span></div>'+
     '<h3>Departamentos observados</h3><div class="office-departments">'+deptHtml+'</div>'+rosterHtml+'<h3>Atividade recente</h3><ul class="office-activity-list">'+recentHtml+'</ul>'+
