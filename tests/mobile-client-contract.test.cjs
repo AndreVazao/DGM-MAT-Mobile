@@ -94,6 +94,9 @@ test("voice controls degrade gracefully when Android WebView speech APIs are una
 test("mobile virtual office consumes authenticated read-only telemetry", () => {
   const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
   assert.match(html, /data-panel="office"/);
+  assert.match(html, /id="refreshCockpitPanel"/);
+  assert.match(app, /function loadCockpitPanel\(name\)/);
+  assert.match(app, /activeCockpitPanel\)loadCockpitPanel\(activeCockpitPanel\)/);
   assert.match(app, /office: \{title:"Escritório virtual DGM-MAT", endpoint:"\/runtime\/office\/telemetry"/);
   assert.match(app, /data\.schema!=="dgm-mat\.office-telemetry\.v1"/);
   assert.match(app, /if\(name==="office"\)body\.innerHTML=renderOfficeTelemetry\(data\)/);
