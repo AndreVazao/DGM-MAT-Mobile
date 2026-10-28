@@ -2,6 +2,8 @@ name: Maestro Android UI Smoke Test
 
 on:
   workflow_dispatch:
+  push:
+    branches: [test/maestro-android-smoke-2026-10-28]
   pull_request:
     branches: [main]
     paths:
