@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: maestro-android-smoke-\${{ github.event.pull_request.number || github.ref }}
+  group: maestro-android-smoke-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -53,7 +53,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "\${ANDROID_HOME:-}" || { echo "ANDROID_HOME is not configured."; exit 1; }
+          test -n "${ANDROID_HOME:-}" || { echo "ANDROID_HOME is not configured."; exit 1; }
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -x "$SDKMANAGER" || { echo "Android SDK manager not found."; exit 1; }
           yes | "$SDKMANAGER" --licenses || true
