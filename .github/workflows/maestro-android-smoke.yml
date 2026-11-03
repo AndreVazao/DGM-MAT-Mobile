@@ -83,13 +83,22 @@ jobs:
       - name: Run UI smoke test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          disable-animations: true
+          cores: 4
+          emulator-boot-timeout: 900
+          disable-animations: false
           script: |
             set -euo pipefail
+            adb wait-for-device
+            for attempt in $(seq 1 60); do
+              booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r' || true)"
+              [ "$booted" = "1" ] && break
+              sleep 2
+            done
+            test "$(adb shell getprop sys.boot_completed | tr -d '\\r')" = "1"
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             maestro test .maestro/flows/smoke.yaml
 
