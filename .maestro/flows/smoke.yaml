@@ -1,0 +1,11 @@
+appId: com.andrevazao.dgmmatmobile
+---
+- launchApp
+- assertVisible: "DGM-MAT"
+- tapOn: "☰"
+- assertVisible: "Ligação ao PC e recuperação USB"
+- tapOn: "Ligação ao PC e recuperação USB"
+- assertVisible: "Ligação ao PC e recuperação USB"
+- assertVisible: "Código de emparelhamento do PC"
+- tapOn: "Fechar"
+- assertVisible: "DGM-MAT"
