@@ -96,6 +96,8 @@ jobs:
             for attempt in $(seq 1 60); do booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"; [ "$booted" = "1" ] && break; sleep 2; done
             test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            # Android instrumentation can need longer than Maestro's 15s default on hosted CI.
+            export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
             maestro test .maestro/flows/smoke.yaml
 
       - name: Upload debug APK for local testing
