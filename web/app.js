@@ -14,7 +14,8 @@ function online(ok,msg){el.dot.classList.toggle("online",ok);el.connection.textC
 function isNativeApp(){return Boolean(window.Capacitor&&typeof window.Capacitor.isNativePlatform==="function"&&window.Capacitor.isNativePlatform())}
 document.documentElement.classList.toggle("native-app",isNativeApp());
 async function discover(){const native=isNativeApp();if(!native&&(location.hostname.includes("tail")||location.hostname.match(/^100\./)||location.hostname==="localhost"||location.hostname==="127.0.0.1")){state.apiBase="";save();return true}try{const r=await fetch(RENDEZVOUS,{cache:"no-store"});if(!r.ok)throw Error("rendezvous HTTP "+r.status);const d=await r.json();const endpoint=d&&d.node&&d.node.endpoint;if(endpoint){state.apiBase=String(endpoint).replace(/\/$/,"");save();return true}state.apiBase="";save();return false}catch(e){state.apiBase="";save();return false}}
-async function connect(){if(!(await discover())){online(false,"PC não encontrado · modo offline");return false}try{const r=await api("/mobile/status");if(r.status===401||r.status===403){online(false,"PC encontrado · emparelhamento necessário");return false}if(!r.ok)throw Error(r.status);const d=await r.json();const aiReady=Boolean((d.governed_chat&&d.governed_chat.available)||(d.ollama&&d.ollama.available));online(true,aiReady?"PC ligado · API e motor de IA disponíveis":"PC ligado · API disponível · motor de IA por configurar");el.endpoint.textContent=d.tailscale&&d.tailscale.hostname||"PC";return true}catch(e){online(false,"PC indisponível · modo offline");return false}}
+function promptPairing(){online(false,"PC encontrado · emparelhamento necessário");const dialog=document.getElementById("usbDialog");if(dialog&&!dialog.open)dialog.showModal()}
+async function connect(){if(!(await discover())){online(false,"PC não encontrado · modo offline");return false}try{const r=await api("/mobile/status");if(r.status===401||r.status===403){session={};try{localStorage.removeItem(SESSION_STORAGE)}catch(e){}promptPairing();return false}if(!r.ok)throw Error(r.status);const d=await r.json();const aiReady=Boolean((d.governed_chat&&d.governed_chat.available)||(d.ollama&&d.ollama.available));online(true,aiReady?"PC ligado · API e motor de IA disponíveis":"PC ligado · API disponível · motor de IA por configurar");el.endpoint.textContent=d.tailscale&&d.tailscale.hostname||"PC";return true}catch(e){online(false,"PC indisponível · modo offline");return false}}
 function active(){return state.threads.find(function(t){return t.id===state.activeId})||null}
 function renderThreads(){el.list.innerHTML=state.threads.map(function(t){return '<button class="thread '+(t.id===state.activeId?"active":"")+'" data-id="'+esc(t.id)+'"><span class="thread-title">'+esc(t.title||"Nova conversa")+'</span><span class="thread-meta">'+new Date(t.updated_at||Date.now()).toLocaleString("pt-PT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+'</span></button>'}).join("")}
 let historySearchTimer=null;
@@ -24,7 +25,7 @@ async function searchHistory(query){
   if(!(await connect())){showNotice("Não foi possível pesquisar: o PC DGM-MAT não está ligado.");return}
   try{
     const r=await api("/mobile/threads/search?q="+encodeURIComponent(value)+"&limit=30");
-    if(!r.ok)throw Error(r.status);
+    if(!r.ok){if(r.status===401||r.status===403){session={};try{localStorage.removeItem(SESSION_STORAGE)}catch(e){}promptPairing()}throw Error(r.status)}
     const data=await r.json();
     const results=Array.isArray(data.results)?data.results:[];
     if(!results.length){el.list.innerHTML='<div class="thread-empty">Não foram encontradas conversas com esse termo.</div>';return}
