@@ -130,3 +130,11 @@ test("mobile pairing code is treated as a secret input", () => {
   const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
   assert.match(html, /id="usbPairCode" type="password"/);
 });
+
+
+test("mobile history search reopens the pairing dialog when the session expires", () => {
+  assert.match(app, /function promptPairing\(\)/);
+  assert.match(app, /if\(r\.status===401\|\|r\.status===403\)\{session=\{\}/);
+  assert.match(app, /promptPairing\(\)\}throw Error\(r\.status\)/);
+  assert.match(app, /document\.getElementById\("usbDialog"\)/);
+});
