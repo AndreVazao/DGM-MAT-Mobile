@@ -116,7 +116,7 @@ test("mobile chat exposes authenticated bounded conversation-history search", ()
   assert.match(html, /id="threadSearch"/);
   assert.match(app, /\/mobile\/threads\/search\?q=/);
   assert.match(app, /async function searchHistory\(query\)/);
-  assert.match(app, /Não foram encontradas conversas com esse termo/);
+  assert.match(app, /Não foram encontradas conversas locais nem arquivos importados/);
 });
 
 test("mobile status distinguishes API connectivity from actual AI engine readiness", () => {
