@@ -83,8 +83,8 @@ async function searchHistory(query){
     el.list.innerHTML=results.map(function(item){
       const recovery=item.kind==="recovery";
       const canOpen=recovery&&String(item.provider||"").toLowerCase()==="chatgpt";
-      const attributes=canOpen?' data-recovery-provider="'+esc(item.provider)+'" data-recovery-source="'+esc(item.source_id)+'"':recovery?' disabled class="thread recovery-metadata-only"':' data-id="'+esc(item.thread_id)+'"';
-      const className=recovery&&!canOpen?"":"thread";
+      const className=recovery&&!canOpen?"thread recovery-metadata-only":"thread";
+      const attributes=canOpen?' data-recovery-provider="'+esc(item.provider)+'" data-recovery-source="'+esc(item.source_id)+'"':recovery?' disabled':' data-id="'+esc(item.thread_id)+'"';
       const label=recovery?"Arquivo "+String(item.provider||"importado")+(canOpen?"":" · só metadados"):String(item.match_type||"histórico");
       return '<button class="'+className+'"'+attributes+'><span class="thread-title">'+esc(item.title||"Nova conversa")+'</span><span class="thread-meta">'+esc(label)+' · '+esc(item.snippet||"")+'</span></button>';
     }).join("");
