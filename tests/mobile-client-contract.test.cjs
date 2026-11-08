@@ -138,3 +138,15 @@ test("mobile history search reopens the pairing dialog when the session expires"
   assert.match(app, /promptPairing\(\)\}throw Error\(r\.status\)/);
   assert.match(app, /document\.getElementById\("usbDialog"\)/);
 });
+
+
+test("mobile history search includes imported archive results and opens indexed ChatGPT archives read-only", () => {
+  assert.match(app, /\/recovery\/search\?q=/);
+  assert.match(app, /async function openRecoveryArchive\(provider,sourceId\)/);
+  assert.match(app, /\/recovery\/sources\//);
+  assert.match(app, /data-recovery-provider/);
+  assert.match(app, /archive_sha256_verified/);
+  assert.match(app, /String\(item\.provider\|\|""\)\.toLowerCase\(\)==="chatgpt"/);
+  assert.match(app, /thread recovery-metadata-only/);
+  assert.match(app, /body\.textContent=/);
+});
