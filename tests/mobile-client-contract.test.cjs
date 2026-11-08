@@ -109,3 +109,24 @@ test("mobile virtual office consumes authenticated read-only telemetry", () => {
   assert.match(app, /Não mostra objetivos de missão nem conteúdo de conversas/);
   assert.doesNotMatch(app.slice(app.indexOf("function renderOfficeTelemetry"), app.indexOf("const cockpitDialog")), /mission\.goal/);
 });
+
+
+test("mobile chat exposes authenticated bounded conversation-history search", () => {
+  const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
+  assert.match(html, /id="threadSearch"/);
+  assert.match(app, /\/mobile\/threads\/search\?q=/);
+  assert.match(app, /async function searchHistory\(query\)/);
+  assert.match(app, /Não foram encontradas conversas com esse termo/);
+});
+
+test("mobile status distinguishes API connectivity from actual AI engine readiness", () => {
+  assert.match(app, /d\.governed_chat&&d\.governed_chat\.available/);
+  assert.match(app, /d\.ollama&&d\.ollama\.available/);
+  assert.match(app, /motor de IA por configurar/);
+  assert.doesNotMatch(app, /PC ligado · DGM-MAT pronto/);
+});
+
+test("mobile pairing code is treated as a secret input", () => {
+  const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
+  assert.match(html, /id="usbPairCode" type="password"/);
+});
