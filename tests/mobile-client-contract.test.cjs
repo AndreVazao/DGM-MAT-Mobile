@@ -135,7 +135,7 @@ test("mobile pairing code is treated as a secret input", () => {
 test("mobile history search reopens the pairing dialog when the session expires", () => {
   assert.match(app, /function promptPairing\(\)/);
   assert.match(app, /if\(r\.status===401\|\|r\.status===403\)\{session=\{\}/);
-  assert.match(app, /promptPairing\(\)\}throw Error\(r\.status\)/);
+  assert.match(app, /promptPairing\(\)\}\s*throw Error\(response\.status\)/);
   assert.match(app, /document\.getElementById\("usbDialog"\)/);
 });
 
