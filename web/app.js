@@ -19,18 +19,74 @@ async function connect(){if(!(await discover())){online(false,"PC não encontrad
 function active(){return state.threads.find(function(t){return t.id===state.activeId})||null}
 function renderThreads(){el.list.innerHTML=state.threads.map(function(t){return '<button class="thread '+(t.id===state.activeId?"active":"")+'" data-id="'+esc(t.id)+'"><span class="thread-title">'+esc(t.title||"Nova conversa")+'</span><span class="thread-meta">'+new Date(t.updated_at||Date.now()).toLocaleString("pt-PT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+'</span></button>'}).join("")}
 let historySearchTimer=null;
+function recoveryText(value){
+  const parts=[];
+  function collect(item){
+    if(typeof item==="string"){parts.push(item);return}
+    if(Array.isArray(item)){item.forEach(collect);return}
+    if(item&&typeof item==="object"){
+      if(typeof item.text==="string"){parts.push(item.text);return}
+      if(Array.isArray(item.parts)){collect(item.parts);return}
+      if(typeof item.content==="string"){parts.push(item.content);return}
+    }
+  }
+  collect(value);
+  return (parts.join("\\n").trim()||JSON.stringify(value)).slice(0,8000);
+}
+async function openRecoveryArchive(provider,sourceId){
+  const dialog=document.getElementById("cockpitDialog");
+  const title=document.getElementById("cockpitTitle");
+  const summary=document.getElementById("cockpitSummary");
+  const body=document.getElementById("cockpitContent");
+  title.textContent="Arquivo importado · "+String(provider||"");
+  summary.textContent="A verificar integridade e a carregar mensagens…";
+  body.textContent="A carregar arquivo…";
+  if(!dialog.open)dialog.showModal();
+  try{
+    const response=await api("/recovery/sources/"+encodeURIComponent(provider)+"/"+encodeURIComponent(sourceId)+"/messages?limit=50&offset=0");
+    const data=await response.json().catch(function(){return{}});
+    if(!response.ok){
+      if(response.status===401||response.status===403){session={};try{localStorage.removeItem(SESSION_STORAGE)}catch(e){}promptPairing()}
+      throw Error((data&&data.detail)||("HTTP "+response.status));
+    }
+    title.textContent=data.title||("Arquivo "+provider);
+    summary.textContent=String(data.total_messages||0)+" mensagens · "+String((data.items||[]).length)+" carregadas · "+(data.archive_sha256_verified?"SHA-256 verificado":"integridade não confirmada")+" · só de leitura"+(data.total_messages>50?" · primeiras 50 mensagens":"");
+    body.textContent=(Array.isArray(data.items)?data.items:[]).map(function(item){
+      return "["+String(item.role||"unknown")+"]\\n"+recoveryText(item.content);
+    }).join("\\n\\n")||"O arquivo não contém mensagens nesta página.";
+  }catch(error){
+    summary.textContent="Consulta ao arquivo indisponível.";
+    body.textContent=(error&&error.message)||String(error);
+  }
+}
 async function searchHistory(query){
   const value=String(query||"").trim();
   if(value.length<2){renderThreads();return}
   if(!(await connect())){showNotice("Não foi possível pesquisar: o PC DGM-MAT não está ligado.");return}
   try{
-    const r=await api("/mobile/threads/search?q="+encodeURIComponent(value)+"&limit=30");
-    if(!r.ok){if(r.status===401||r.status===403){session={};try{localStorage.removeItem(SESSION_STORAGE)}catch(e){}promptPairing()}throw Error(r.status)}
-    const data=await r.json();
-    const results=Array.isArray(data.results)?data.results:[];
-    if(!results.length){el.list.innerHTML='<div class="thread-empty">Não foram encontradas conversas com esse termo.</div>';return}
+    const responses=await Promise.all([
+      api("/mobile/threads/search?q="+encodeURIComponent(value)+"&limit=30"),
+      api("/recovery/search?q="+encodeURIComponent(value)+"&limit=30")
+    ]);
+    for(const response of responses){
+      if(!response.ok){
+        if(response.status===401||response.status===403){session={};try{localStorage.removeItem(SESSION_STORAGE)}catch(e){}promptPairing()}
+        throw Error(response.status);
+      }
+    }
+    const localData=await responses[0].json();
+    const recoveryData=await responses[1].json();
+    const localResults=(Array.isArray(localData.results)?localData.results:[]).map(function(item){return Object.assign({kind:"thread"},item)});
+    const recoveryResults=(Array.isArray(recoveryData.results)?recoveryData.results:[]).map(function(item){return Object.assign({kind:"recovery"},item)});
+    const results=localResults.concat(recoveryResults);
+    if(!results.length){el.list.innerHTML='<div class="thread-empty">Não foram encontradas conversas locais nem arquivos importados.</div>';return}
     el.list.innerHTML=results.map(function(item){
-      return '<button class="thread" data-id="'+esc(item.thread_id)+'"><span class="thread-title">'+esc(item.title||"Nova conversa")+'</span><span class="thread-meta">'+esc(item.match_type||"histórico")+' · '+esc(item.snippet||"")+'</span></button>';
+      const recovery=item.kind==="recovery";
+      const canOpen=recovery&&String(item.provider||"").toLowerCase()==="chatgpt";
+      const attributes=canOpen?' data-recovery-provider="'+esc(item.provider)+'" data-recovery-source="'+esc(item.source_id)+'"':recovery?' disabled class="thread recovery-metadata-only"':' data-id="'+esc(item.thread_id)+'"';
+      const className=recovery&&!canOpen?"":"thread";
+      const label=recovery?"Arquivo "+String(item.provider||"importado")+(canOpen?"":" · só metadados"):String(item.match_type||"histórico");
+      return '<button class="'+className+'"'+attributes+'><span class="thread-title">'+esc(item.title||"Nova conversa")+'</span><span class="thread-meta">'+esc(label)+' · '+esc(item.snippet||"")+'</span></button>';
     }).join("");
   }catch(error){showNotice("Pesquisa do histórico indisponível: "+(error&&error.message||"erro desconhecido"))}
 }
@@ -46,7 +102,7 @@ async function send(){const value=el.input.value.trim();if(!value)return;let t=a
 async function flush(){if(!(await connect()))return;for(const item of state.pending.slice()){try{let t=state.threads.find(function(x){return x.id===item.threadId});if(!t)continue;t=await serverThread(t);const r=await api("/mobile/threads/"+encodeURIComponent(t.id)+"/messages",{method:"POST",body:JSON.stringify({content:item.content})});if(!r.ok)throw Error(r.status);const d=await r.json(),i=state.threads.findIndex(function(x){return x.id===t.id});if(i>=0)state.threads[i]=d.thread;state.pending=state.pending.filter(function(x){return x!==item});save();showIntent(d.intent)}catch(e){break}}renderChat()}
 async function rename(){const t=active();if(!t)return;el.renameInput.value=t.title||"Nova conversa";el.dialog.showModal()}
 document.getElementById("saveRename").addEventListener("click",async function(e){e.preventDefault();const title=el.renameInput.value.trim(),t=active();if(!title||!t)return;if(t.id.startsWith("local-"))t.title=title;else if(await connect()){const r=await api("/mobile/threads/"+encodeURIComponent(t.id)+"/rename",{method:"POST",body:JSON.stringify({title:title})});if(r.ok){const s=await r.json(),i=state.threads.findIndex(function(x){return x.id===t.id});if(i>=0)state.threads[i]=s}}save();renderChat();el.dialog.close()});
-document.getElementById("newChat").onclick=function(){localThread();el.drawer.classList.remove("open")};document.getElementById("openDrawer").onclick=function(){el.drawer.classList.add("open")};document.getElementById("closeDrawer").onclick=function(){el.drawer.classList.remove("open")};document.getElementById("renameButton").onclick=rename;el.title.onclick=rename;document.getElementById("refresh").onclick=load;el.list.onclick=function(e){const b=e.target.closest("[data-id]");if(b){if(el.search)el.search.value="";select(b.dataset.id)}};if(el.search)el.search.addEventListener("input",function(){if(historySearchTimer)clearTimeout(historySearchTimer);const value=this.value;historySearchTimer=setTimeout(function(){searchHistory(value)},300)});document.getElementById("composer").onsubmit=function(e){e.preventDefault();send()};el.input.addEventListener("input",function(){el.input.style.height="auto";el.input.style.height=Math.min(el.input.scrollHeight,160)+"px"});el.input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});window.addEventListener("error",function(e){try{showNotice("Erro na interface: "+(e.message||"JavaScript"))}catch(_){}});window.addEventListener("unhandledrejection",function(e){try{showNotice("Erro inesperado: "+(e.reason&&e.reason.message||e.reason||"desconhecido"))}catch(_){}});window.addEventListener("online",flush);if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){});load();setInterval(function(){if(!document.hidden)flush()},15000);
+document.getElementById("newChat").onclick=function(){localThread();el.drawer.classList.remove("open")};document.getElementById("openDrawer").onclick=function(){el.drawer.classList.add("open")};document.getElementById("closeDrawer").onclick=function(){el.drawer.classList.remove("open")};document.getElementById("renameButton").onclick=rename;el.title.onclick=rename;document.getElementById("refresh").onclick=load;el.list.onclick=function(e){const recovery=e.target.closest("[data-recovery-provider]");if(recovery){if(el.search)el.search.value="";openRecoveryArchive(recovery.dataset.recoveryProvider,recovery.dataset.recoverySource);return}const b=e.target.closest("[data-id]");if(b){if(el.search)el.search.value="";select(b.dataset.id)}};if(el.search)el.search.addEventListener("input",function(){if(historySearchTimer)clearTimeout(historySearchTimer);const value=this.value;historySearchTimer=setTimeout(function(){searchHistory(value)},300)});document.getElementById("composer").onsubmit=function(e){e.preventDefault();send()};el.input.addEventListener("input",function(){el.input.style.height="auto";el.input.style.height=Math.min(el.input.scrollHeight,160)+"px"});el.input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});window.addEventListener("error",function(e){try{showNotice("Erro na interface: "+(e.message||"JavaScript"))}catch(_){}});window.addEventListener("unhandledrejection",function(e){try{showNotice("Erro inesperado: "+(e.reason&&e.reason.message||e.reason||"desconhecido"))}catch(_){}});window.addEventListener("online",flush);if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){});load();setInterval(function(){if(!document.hidden)flush()},15000);
 
 
 // Cockpit navigation: only call existing read endpoints; unavailable APIs are reported honestly.
