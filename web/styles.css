@@ -76,3 +76,5 @@
 .thread-search:focus{border-color:var(--accent,#7aa2ff);box-shadow:0 0 0 2px rgba(122,162,255,.16)}
 .thread-search::placeholder{color:rgba(230,235,245,.58)}
 .thread-empty{padding:12px;color:rgba(230,235,245,.65);font-size:13px}
+
+.thread.recovery-metadata-only{opacity:.62;cursor:not-allowed;border-left:2px solid var(--accent,#7aa2ff)}
