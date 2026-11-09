@@ -60,3 +60,21 @@
 .office-roster-card small{color:var(--muted);font-size:9px;overflow-wrap:anywhere}
 .office-roster-state{font-size:9px;color:var(--muted)}
 @media(min-width:520px){.office-roster-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+.thread-search{
+  width:calc(100% - 24px);
+  margin:10px 12px 6px;
+  padding:11px 12px;
+  border:1px solid var(--line,rgba(255,255,255,.14));
+  border-radius:12px;
+  background:rgba(255,255,255,.06);
+  color:inherit;
+  font:inherit;
+  outline:none;
+}
+.thread-search:focus{border-color:var(--accent,#7aa2ff);box-shadow:0 0 0 2px rgba(122,162,255,.16)}
+.thread-search::placeholder{color:rgba(230,235,245,.58)}
+.thread-empty{padding:12px;color:rgba(230,235,245,.65);font-size:13px}
+
+.thread.recovery-metadata-only{opacity:.62;cursor:not-allowed;border-left:2px solid var(--accent,#7aa2ff)}

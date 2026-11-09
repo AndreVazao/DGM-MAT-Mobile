@@ -1,0 +1,92 @@
+name: Mobile PR Validation and APK Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "tests/**"
+      - "package.json"
+      - "capacitor.config.json"
+      - ".github/workflows/mobile-pr-validation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dgm-mobile-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-build:
+    name: Contract tests and Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Validate client contracts and syntax
+        run: |
+          npm install --no-audit --no-fund
+          npm run test:contract
+          node --check web/app.js
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}" || { echo "ANDROID_HOME is not configured."; exit 1; }
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -x "$SDKMANAGER" || { echo "Android SDK manager not found."; exit 1; }
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Generate Capacitor Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Increase Gradle distribution download timeout
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRAPPER="android/gradle/wrapper/gradle-wrapper.properties"
+          if grep -q '^networkTimeout=' "$WRAPPER"; then
+            sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$WRAPPER"
+          else
+            printf '\nnetworkTimeout=120000\n' >> "$WRAPPER"
+          fi
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+          test -s app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify Android package identity and digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.andrevazao.dgmmatmobile'"
+          sha256sum "$APK" | tee DGM-MAT-Mobile-debug.apk.sha256
+          cp "$APK" DGM-MAT-Mobile-debug.apk
+      - name: Upload verified APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: DGM-MAT-Mobile-Android-APK-${{ github.sha }}
+          path: |
+            DGM-MAT-Mobile-debug.apk
+            DGM-MAT-Mobile-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 30

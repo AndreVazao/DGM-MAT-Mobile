@@ -1,0 +1,139 @@
+name: Maestro Android UI Smoke Test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "capacitor.config.json"
+      - ".maestro/**"
+      - ".github/workflows/maestro-android-smoke.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maestro-android-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-ui-smoke:
+    name: Build APK and run Maestro on Android emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Validate mobile client
+        run: |
+          npm install --no-audit --no-fund
+          npm run test:contract
+          node --check web/app.js
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}" || { echo "ANDROID_HOME is not configured."; exit 1; }
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -x "$SDKMANAGER" || { echo "Android SDK manager not found."; exit 1; }
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-30" "build-tools;35.0.0"
+
+      - name: Generate Capacitor Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Increase Gradle distribution download timeout
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRAPPER="android/gradle/wrapper/gradle-wrapper.properties"
+          if grep -q '^networkTimeout=' "$WRAPPER"; then
+            sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$WRAPPER"
+          else
+            printf '\\nnetworkTimeout=120000\\n' >> "$WRAPPER"
+          fi
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+          test -s app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Install Maestro CLI with transient-download retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          INSTALLER="$RUNNER_TEMP/install-maestro.sh"
+          curl -fLsS --retry 5 --retry-all-errors --retry-delay 5 "https://get.maestro.mobile.dev" -o "$INSTALLER"
+          installed=false
+          for attempt in 1 2 3 4; do
+            if bash "$INSTALLER" && test -x "$HOME/.maestro/bin/maestro"; then
+              installed=true
+              break
+            fi
+            rm -rf "$HOME/.maestro"
+            sleep $((attempt * 10))
+          done
+          test "$installed" = "true"
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          "$HOME/.maestro/bin/maestro" --version
+
+      - name: Run UI smoke test on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          cores: 4
+          ram-size: 3072M
+          heap-size: 1024M
+          emulator-boot-timeout: 900
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -camera-back none -camera-front none
+          script: |
+            set -euo pipefail
+            adb wait-for-device
+            for attempt in $(seq 1 60); do
+              booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r' || true)"
+              [ "$booted" = "1" ] && break
+              sleep 2
+            done
+            test "$(adb shell getprop sys.boot_completed | tr -d '\\r')" = "1"
+            adb shell settings put global window_animation_scale 0.0 >/dev/null 2>&1 || true
+            adb shell settings put global transition_animation_scale 0.0 >/dev/null 2>&1 || true
+            adb shell settings put global animator_duration_scale 0.0 >/dev/null 2>&1 || true
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            export MAESTRO_DRIVER_STARTUP_TIMEOUT=300000
+            maestro test .maestro/flows/smoke.yaml
+
+      - name: Upload debug APK for local testing
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: DGM-MAT-Mobile-Maestro-smoke-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+          retention-days: 14

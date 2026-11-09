@@ -109,3 +109,48 @@ test("mobile virtual office consumes authenticated read-only telemetry", () => {
   assert.match(app, /Não mostra objetivos de missão nem conteúdo de conversas/);
   assert.doesNotMatch(app.slice(app.indexOf("function renderOfficeTelemetry"), app.indexOf("const cockpitDialog")), /mission\.goal/);
 });
+
+
+test("mobile chat exposes authenticated bounded conversation-history search", () => {
+  const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
+  assert.match(html, /id="threadSearch"/);
+  assert.match(app, /\/mobile\/threads\/search\?q=/);
+  assert.match(app, /async function searchHistory\(query\)/);
+  assert.match(app, /Não foram encontradas conversas locais nem arquivos importados/);
+});
+
+test("mobile status distinguishes API connectivity from actual AI engine readiness", () => {
+  assert.match(app, /d\.governed_chat&&d\.governed_chat\.available/);
+  assert.match(app, /d\.ollama&&d\.ollama\.available/);
+  assert.match(app, /motor de IA por configurar/);
+  assert.doesNotMatch(app, /PC ligado · DGM-MAT pronto/);
+});
+
+test("mobile pairing code is treated as a secret input", () => {
+  const html = fs.readFileSync(path.join(root, "web/index.html"), "utf8");
+  assert.match(html, /id="usbPairCode" type="password"/);
+});
+
+
+test("mobile history search reopens the pairing dialog when the session expires", () => {
+  assert.match(app, /function promptPairing\(\)/);
+  assert.match(app, /if\(r\.status===401\|\|r\.status===403\)\{session=\{\}/);
+  assert.match(app, /promptPairing\(\)\}\s*throw Error\(response\.status\)/);
+  assert.match(app, /document\.getElementById\("usbDialog"\)/);
+});
+
+
+test("mobile history search includes imported archive results and opens indexed ChatGPT archives read-only", () => {
+  assert.match(app, /\/recovery\/search\?q=/);
+  assert.match(app, /async function openRecoveryArchive\(provider,sourceId\)/);
+  assert.match(app, /\/recovery\/sources\//);
+  assert.match(app, /data-recovery-provider/);
+  assert.match(app, /archive_sha256_verified/);
+  assert.match(app, /String\(item\.provider\|\|""\)\.toLowerCase\(\)==="chatgpt"/);
+  assert.match(app, /thread recovery-metadata-only/);
+  assert.match(app, /body\.textContent=/);
+  assert.ok(app.includes('parts.join("\\n")'));
+  assert.ok(app.includes('"]\\n"+recoveryText(item.content)'));
+  assert.ok(app.includes('.join("\\n\\n")'));
+  assert.ok(!app.includes('parts.join("\\\\n")'));
+});

@@ -5,7 +5,7 @@ const SESSION_STORAGE="dgm-mat-mobile-session-v1";
 let session={};try{session=JSON.parse(localStorage.getItem(SESSION_STORAGE)||"{}")}catch(e){session={}}
 let state={};try{state=JSON.parse(localStorage.getItem(STORAGE)||"{}")}catch(e){try{localStorage.removeItem(STORAGE)}catch(_){}state={}}
 state.threads=Array.isArray(state.threads)?state.threads:[];state.activeId=state.activeId||null;state.apiBase=state.apiBase||"";state.pending=Array.isArray(state.pending)?state.pending:[];
-const el={drawer:document.getElementById("drawer"),list:document.getElementById("threadList"),chat:document.getElementById("chat"),input:document.getElementById("input"),dot:document.getElementById("dot"),connection:document.getElementById("connectionText"),title:document.getElementById("titleButton"),context:document.getElementById("contextLine"),intent:document.getElementById("intentBar"),dialog:document.getElementById("renameDialog"),renameInput:document.getElementById("renameInput"),endpoint:document.getElementById("endpointLabel")};
+const el={drawer:document.getElementById("drawer"),list:document.getElementById("threadList"),chat:document.getElementById("chat"),input:document.getElementById("input"),dot:document.getElementById("dot"),connection:document.getElementById("connectionText"),title:document.getElementById("titleButton"),context:document.getElementById("contextLine"),intent:document.getElementById("intentBar"),dialog:document.getElementById("renameDialog"),renameInput:document.getElementById("renameInput"),endpoint:document.getElementById("endpointLabel"),search:document.getElementById("threadSearch")};
 function save(){try{localStorage.setItem(STORAGE,JSON.stringify(state))}catch(e){showNotice("Não foi possível guardar o estado local neste dispositivo.")}}
 function esc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]})}
 function makeId(){return typeof crypto!=="undefined"&&typeof crypto.randomUUID==="function"?crypto.randomUUID():""+Date.now()+"-"+Math.random().toString(36).slice(2)}
@@ -14,9 +14,82 @@ function online(ok,msg){el.dot.classList.toggle("online",ok);el.connection.textC
 function isNativeApp(){return Boolean(window.Capacitor&&typeof window.Capacitor.isNativePlatform==="function"&&window.Capacitor.isNativePlatform())}
 document.documentElement.classList.toggle("native-app",isNativeApp());
 async function discover(){const native=isNativeApp();if(!native&&(location.hostname.includes("tail")||location.hostname.match(/^100\./)||location.hostname==="localhost"||location.hostname==="127.0.0.1")){state.apiBase="";save();return true}try{const r=await fetch(RENDEZVOUS,{cache:"no-store"});if(!r.ok)throw Error("rendezvous HTTP "+r.status);const d=await r.json();const endpoint=d&&d.node&&d.node.endpoint;if(endpoint){state.apiBase=String(endpoint).replace(/\/$/,"");save();return true}state.apiBase="";save();return false}catch(e){state.apiBase="";save();return false}}
-async function connect(){if(!(await discover())){online(false,"PC não encontrado · modo offline");return false}try{const r=await api("/mobile/status");if(r.status===401||r.status===403){online(false,"PC encontrado · emparelhamento necessário");return false}if(!r.ok)throw Error(r.status);const d=await r.json();online(true,"PC ligado · DGM-MAT pronto");el.endpoint.textContent=d.tailscale&&d.tailscale.hostname||"PC";return true}catch(e){online(false,"PC indisponível · modo offline");return false}}
+function promptPairing(){online(false,"PC encontrado · emparelhamento necessário");const dialog=document.getElementById("usbDialog");if(dialog&&!dialog.open)dialog.showModal()}
+async function connect(){if(!(await discover())){online(false,"PC não encontrado · modo offline");return false}try{const r=await api("/mobile/status");if(r.status===401||r.status===403){session={};try{localStorage.removeItem(SESSION_STORAGE)}catch(e){}promptPairing();return false}if(!r.ok)throw Error(r.status);const d=await r.json();const aiReady=Boolean((d.governed_chat&&d.governed_chat.available)||(d.ollama&&d.ollama.available));online(true,aiReady?"PC ligado · API e motor de IA disponíveis":"PC ligado · API disponível · motor de IA por configurar");el.endpoint.textContent=d.tailscale&&d.tailscale.hostname||"PC";return true}catch(e){online(false,"PC indisponível · modo offline");return false}}
 function active(){return state.threads.find(function(t){return t.id===state.activeId})||null}
 function renderThreads(){el.list.innerHTML=state.threads.map(function(t){return '<button class="thread '+(t.id===state.activeId?"active":"")+'" data-id="'+esc(t.id)+'"><span class="thread-title">'+esc(t.title||"Nova conversa")+'</span><span class="thread-meta">'+new Date(t.updated_at||Date.now()).toLocaleString("pt-PT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+'</span></button>'}).join("")}
+let historySearchTimer=null;
+function recoveryText(value){
+  const parts=[];
+  function collect(item){
+    if(typeof item==="string"){parts.push(item);return}
+    if(Array.isArray(item)){item.forEach(collect);return}
+    if(item&&typeof item==="object"){
+      if(typeof item.text==="string"){parts.push(item.text);return}
+      if(Array.isArray(item.parts)){collect(item.parts);return}
+      if(typeof item.content==="string"){parts.push(item.content);return}
+    }
+  }
+  collect(value);
+  return (parts.join("\n").trim()||JSON.stringify(value)).slice(0,8000);
+}
+async function openRecoveryArchive(provider,sourceId){
+  const dialog=document.getElementById("cockpitDialog");
+  const title=document.getElementById("cockpitTitle");
+  const summary=document.getElementById("cockpitSummary");
+  const body=document.getElementById("cockpitContent");
+  title.textContent="Arquivo importado · "+String(provider||"");
+  summary.textContent="A verificar integridade e a carregar mensagens…";
+  body.textContent="A carregar arquivo…";
+  if(!dialog.open)dialog.showModal();
+  try{
+    const response=await api("/recovery/sources/"+encodeURIComponent(provider)+"/"+encodeURIComponent(sourceId)+"/messages?limit=50&offset=0");
+    const data=await response.json().catch(function(){return{}});
+    if(!response.ok){
+      if(response.status===401||response.status===403){session={};try{localStorage.removeItem(SESSION_STORAGE)}catch(e){}promptPairing()}
+      throw Error((data&&data.detail)||("HTTP "+response.status));
+    }
+    title.textContent=data.title||("Arquivo "+provider);
+    summary.textContent=String(data.total_messages||0)+" mensagens · "+String((data.items||[]).length)+" carregadas · "+(data.archive_sha256_verified?"SHA-256 verificado":"integridade não confirmada")+" · só de leitura"+(data.total_messages>50?" · primeiras 50 mensagens":"");
+    body.textContent=(Array.isArray(data.items)?data.items:[]).map(function(item){
+      return "["+String(item.role||"unknown")+"]\n"+recoveryText(item.content);
+    }).join("\n\n")||"O arquivo não contém mensagens nesta página.";
+  }catch(error){
+    summary.textContent="Consulta ao arquivo indisponível.";
+    body.textContent=(error&&error.message)||String(error);
+  }
+}
+async function searchHistory(query){
+  const value=String(query||"").trim();
+  if(value.length<2){renderThreads();return}
+  if(!(await connect())){showNotice("Não foi possível pesquisar: o PC DGM-MAT não está ligado.");return}
+  try{
+    const responses=await Promise.all([
+      api("/mobile/threads/search?q="+encodeURIComponent(value)+"&limit=30"),
+      api("/recovery/search?q="+encodeURIComponent(value)+"&limit=30")
+    ]);
+    for(const response of responses){
+      if(!response.ok){
+        if(response.status===401||response.status===403){session={};try{localStorage.removeItem(SESSION_STORAGE)}catch(e){}promptPairing()}
+        throw Error(response.status);
+      }
+    }
+    const localData=await responses[0].json();
+    const recoveryData=await responses[1].json();
+    const localResults=(Array.isArray(localData.results)?localData.results:[]).map(function(item){return Object.assign({kind:"thread"},item)});
+    const recoveryResults=(Array.isArray(recoveryData.results)?recoveryData.results:[]).map(function(item){return Object.assign({kind:"recovery"},item)});
+    const results=localResults.concat(recoveryResults);
+    if(!results.length){el.list.innerHTML='<div class="thread-empty">Não foram encontradas conversas locais nem arquivos importados.</div>';return}
+    el.list.innerHTML=results.map(function(item){
+      const recovery=item.kind==="recovery";
+      const canOpen=recovery&&String(item.provider||"").toLowerCase()==="chatgpt";
+      const className=recovery&&!canOpen?"thread recovery-metadata-only":"thread";
+      const attributes=canOpen?' data-recovery-provider="'+esc(item.provider)+'" data-recovery-source="'+esc(item.source_id)+'"':recovery?' disabled':' data-id="'+esc(item.thread_id)+'"';
+      const label=recovery?"Arquivo "+String(item.provider||"importado")+(canOpen?"":" · só metadados"):String(item.match_type||"histórico");
+      return '<button class="'+className+'"'+attributes+'><span class="thread-title">'+esc(item.title||"Nova conversa")+'</span><span class="thread-meta">'+esc(label)+' · '+esc(item.snippet||"")+'</span></button>';
+    }).join("");
+  }catch(error){showNotice("Pesquisa do histórico indisponível: "+(error&&error.message||"erro desconhecido"))}
+}
 function renderChat(){const t=active();el.title.textContent=t&&t.title||"Nova conversa";el.context.textContent=t&&t.repository?(t.repository+(t.project?" · "+t.project:"")):"DGM-MAT · conversa contínua";el.chat.innerHTML=(t&&t.messages||[]).map(function(m){return '<div class="message-row '+(m.role==="user"?"user":"")+'"><div class="message '+(m.role==="user"?"user":"assistant")+' '+(m.state==="pending"?"pending":"")+'">'+esc(m.content)+'<div class="meta">'+(m.role==="user"?"Tu":"DGM-MAT")+" · "+new Date(m.created_at||Date.now()).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"})+(m.state==="pending"?" · pendente":"")+"</div></div></div>"}).join("");el.chat.scrollTop=el.chat.scrollHeight;renderThreads()}
 function localThread(){const t={id:"local-"+makeId(),title:"Nova conversa",created_at:new Date().toISOString(),updated_at:new Date().toISOString(),messages:[],status:"active"};state.threads.unshift(t);state.activeId=t.id;save();renderChat();return t}
 async function createServer(title){const r=await api("/mobile/threads",{method:"POST",body:JSON.stringify({title:title||"Nova conversa"})});if(!r.ok)throw Error(r.status);return r.json()}
@@ -29,7 +102,7 @@ async function send(){const value=el.input.value.trim();if(!value)return;let t=a
 async function flush(){if(!(await connect()))return;for(const item of state.pending.slice()){try{let t=state.threads.find(function(x){return x.id===item.threadId});if(!t)continue;t=await serverThread(t);const r=await api("/mobile/threads/"+encodeURIComponent(t.id)+"/messages",{method:"POST",body:JSON.stringify({content:item.content})});if(!r.ok)throw Error(r.status);const d=await r.json(),i=state.threads.findIndex(function(x){return x.id===t.id});if(i>=0)state.threads[i]=d.thread;state.pending=state.pending.filter(function(x){return x!==item});save();showIntent(d.intent)}catch(e){break}}renderChat()}
 async function rename(){const t=active();if(!t)return;el.renameInput.value=t.title||"Nova conversa";el.dialog.showModal()}
 document.getElementById("saveRename").addEventListener("click",async function(e){e.preventDefault();const title=el.renameInput.value.trim(),t=active();if(!title||!t)return;if(t.id.startsWith("local-"))t.title=title;else if(await connect()){const r=await api("/mobile/threads/"+encodeURIComponent(t.id)+"/rename",{method:"POST",body:JSON.stringify({title:title})});if(r.ok){const s=await r.json(),i=state.threads.findIndex(function(x){return x.id===t.id});if(i>=0)state.threads[i]=s}}save();renderChat();el.dialog.close()});
-document.getElementById("newChat").onclick=function(){localThread();el.drawer.classList.remove("open")};document.getElementById("openDrawer").onclick=function(){el.drawer.classList.add("open")};document.getElementById("closeDrawer").onclick=function(){el.drawer.classList.remove("open")};document.getElementById("renameButton").onclick=rename;el.title.onclick=rename;document.getElementById("refresh").onclick=load;el.list.onclick=function(e){const b=e.target.closest("[data-id]");if(b)select(b.dataset.id)};document.getElementById("composer").onsubmit=function(e){e.preventDefault();send()};el.input.addEventListener("input",function(){el.input.style.height="auto";el.input.style.height=Math.min(el.input.scrollHeight,160)+"px"});el.input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});window.addEventListener("error",function(e){try{showNotice("Erro na interface: "+(e.message||"JavaScript"))}catch(_){}});window.addEventListener("unhandledrejection",function(e){try{showNotice("Erro inesperado: "+(e.reason&&e.reason.message||e.reason||"desconhecido"))}catch(_){}});window.addEventListener("online",flush);if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){});load();setInterval(function(){if(!document.hidden)flush()},15000);
+document.getElementById("newChat").onclick=function(){localThread();el.drawer.classList.remove("open")};document.getElementById("openDrawer").onclick=function(){el.drawer.classList.add("open")};document.getElementById("closeDrawer").onclick=function(){el.drawer.classList.remove("open")};document.getElementById("renameButton").onclick=rename;el.title.onclick=rename;document.getElementById("refresh").onclick=load;el.list.onclick=function(e){const recovery=e.target.closest("[data-recovery-provider]");if(recovery){if(el.search)el.search.value="";openRecoveryArchive(recovery.dataset.recoveryProvider,recovery.dataset.recoverySource);return}const b=e.target.closest("[data-id]");if(b){if(el.search)el.search.value="";select(b.dataset.id)}};if(el.search)el.search.addEventListener("input",function(){if(historySearchTimer)clearTimeout(historySearchTimer);const value=this.value;historySearchTimer=setTimeout(function(){searchHistory(value)},300)});document.getElementById("composer").onsubmit=function(e){e.preventDefault();send()};el.input.addEventListener("input",function(){el.input.style.height="auto";el.input.style.height=Math.min(el.input.scrollHeight,160)+"px"});el.input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});window.addEventListener("error",function(e){try{showNotice("Erro na interface: "+(e.message||"JavaScript"))}catch(_){}});window.addEventListener("unhandledrejection",function(e){try{showNotice("Erro inesperado: "+(e.reason&&e.reason.message||e.reason||"desconhecido"))}catch(_){}});window.addEventListener("online",flush);if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js").catch(function(){});load();setInterval(function(){if(!document.hidden)flush()},15000);
 
 
 // Cockpit navigation: only call existing read endpoints; unavailable APIs are reported honestly.
