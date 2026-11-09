@@ -81,11 +81,22 @@ jobs:
           ./gradlew --no-daemon assembleDebug
           test -s app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Install Maestro CLI
+      - name: Install Maestro CLI with transient-download retries
         shell: bash
         run: |
           set -euo pipefail
-          curl -Ls "https://get.maestro.mobile.dev" | bash
+          INSTALLER="$RUNNER_TEMP/install-maestro.sh"
+          curl -fLsS --retry 5 --retry-all-errors --retry-delay 5 "https://get.maestro.mobile.dev" -o "$INSTALLER"
+          installed=false
+          for attempt in 1 2 3 4; do
+            if bash "$INSTALLER" && test -x "$HOME/.maestro/bin/maestro"; then
+              installed=true
+              break
+            fi
+            rm -rf "$HOME/.maestro"
+            sleep $((attempt * 10))
+          done
+          test "$installed" = "true"
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
           "$HOME/.maestro/bin/maestro" --version
 
