@@ -149,4 +149,8 @@ test("mobile history search includes imported archive results and opens indexed 
   assert.match(app, /String\(item\.provider\|\|""\)\.toLowerCase\(\)==="chatgpt"/);
   assert.match(app, /thread recovery-metadata-only/);
   assert.match(app, /body\.textContent=/);
+  assert.match(app, /parts\.join\("\\n"\)/);
+  assert.match(app, /\]\+String\(item\.role\|\|"unknown"\)\+"\\n"/);
+  assert.match(app, /\.join\("\\n\\n"\)/);
+  assert.doesNotMatch(app, /parts\.join\("\\\\n"\)/);
 });
