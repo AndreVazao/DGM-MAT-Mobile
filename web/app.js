@@ -31,7 +31,7 @@ function recoveryText(value){
     }
   }
   collect(value);
-  return (parts.join("\\n").trim()||JSON.stringify(value)).slice(0,8000);
+  return (parts.join("\n").trim()||JSON.stringify(value)).slice(0,8000);
 }
 async function openRecoveryArchive(provider,sourceId){
   const dialog=document.getElementById("cockpitDialog");
@@ -52,8 +52,8 @@ async function openRecoveryArchive(provider,sourceId){
     title.textContent=data.title||("Arquivo "+provider);
     summary.textContent=String(data.total_messages||0)+" mensagens · "+String((data.items||[]).length)+" carregadas · "+(data.archive_sha256_verified?"SHA-256 verificado":"integridade não confirmada")+" · só de leitura"+(data.total_messages>50?" · primeiras 50 mensagens":"");
     body.textContent=(Array.isArray(data.items)?data.items:[]).map(function(item){
-      return "["+String(item.role||"unknown")+"]\\n"+recoveryText(item.content);
-    }).join("\\n\\n")||"O arquivo não contém mensagens nesta página.";
+      return "["+String(item.role||"unknown")+"]\n"+recoveryText(item.content);
+    }).join("\n\n")||"O arquivo não contém mensagens nesta página.";
   }catch(error){
     summary.textContent="Consulta ao arquivo indisponível.";
     body.textContent=(error&&error.message)||String(error);
