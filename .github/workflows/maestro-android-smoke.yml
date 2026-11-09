@@ -71,7 +71,7 @@ jobs:
           if grep -q '^networkTimeout=' "$WRAPPER"; then
             sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$WRAPPER"
           else
-            printf '\nnetworkTimeout=120000\n' >> "$WRAPPER"
+            printf '\\nnetworkTimeout=120000\\n' >> "$WRAPPER"
           fi
 
       - name: Build debug APK
@@ -114,14 +114,8 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
-            set -euo pipefail
             adb wait-for-device
-            for attempt in $(seq 1 60); do
-              booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
-              [ "$booted" = "1" ] && break
-              sleep 2
-            done
-            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
+            test "$(adb shell getprop sys.boot_completed | tr -d '\\r')" = "1"
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             export MAESTRO_DRIVER_STARTUP_TIMEOUT=300000
             maestro test .maestro/flows/smoke.yaml
